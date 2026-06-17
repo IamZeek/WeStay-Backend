@@ -13,7 +13,8 @@ namespace WeStay.ListingService.Data
         public DbSet<Listing> Listings { get; set; }
         public DbSet<Amenity> Amenities { get; set; }
         public DbSet<ListingImage> ListingImages { get; set; }
-        public DbSet<Booking> Bookings { get; set; }
+        // Booking ownership moved to WeStay.BookingService (Phase 1 de-duplication).
+        // The Booking entity/DbSet was removed from ListingService.
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -41,22 +42,9 @@ namespace WeStay.ListingService.Data
             modelBuilder.Entity<Listing>()
                 .HasIndex(l => new { l.City, l.Country });
 
-            modelBuilder.Entity<Booking>()
-                .HasIndex(b => b.GuestId);
-
-            modelBuilder.Entity<Booking>()
-                .HasIndex(b => b.ListingId);
-
-            modelBuilder.Entity<Booking>()
-                .HasIndex(b => b.Status);
-
             // Configure decimal precision
             modelBuilder.Entity<Listing>()
                 .Property(l => l.PricePerNight)
-                .HasPrecision(18, 2);
-
-            modelBuilder.Entity<Booking>()
-                .Property(b => b.TotalPrice)
                 .HasPrecision(18, 2);
 
             // Seed initial amenities

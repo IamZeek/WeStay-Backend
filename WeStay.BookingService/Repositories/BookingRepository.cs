@@ -22,7 +22,6 @@ namespace WeStay.BookingService.Repositories
                 .Include(b => b.Status)
                 .Include(b => b.Guests)
                 .Include(b => b.Payments)
-                .Include(b => b.Review)
                 .FirstOrDefaultAsync(b => b.Id == id);
         }
 
@@ -32,7 +31,6 @@ namespace WeStay.BookingService.Repositories
                 .Include(b => b.Status)
                 .Include(b => b.Guests)
                 .Include(b => b.Payments)
-                .Include(b => b.Review)
                 .FirstOrDefaultAsync(b => b.BookingCode == bookingCode);
         }
 

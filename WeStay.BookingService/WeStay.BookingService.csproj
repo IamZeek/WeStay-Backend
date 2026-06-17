@@ -4,7 +4,16 @@
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>cbfd7409-c09d-4aef-85a8-6c6c1ceaff24</UserSecretsId>
   </PropertyGroup>
+
+  <!-- Phase 3 (Reviews): preserved but NOT compiled. See file headers in /Future. -->
+  <ItemGroup>
+    <Compile Remove="Future\**" />
+    <Content Remove="Future\**" />
+    <EmbeddedResource Remove="Future\**" />
+    <None Include="Future\**" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.19" />

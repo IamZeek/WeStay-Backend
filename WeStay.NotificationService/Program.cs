@@ -12,8 +12,12 @@ using WeStay.NotificationService.Models;
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
+var connectionString = builder.Configuration.GetConnectionString("NotificationConnection")
+    ?? throw new InvalidOperationException(
+        "Connection string 'NotificationConnection' is not configured. " +
+        "Set it via User Secrets or an environment variable (it must not be committed to appsettings.json).");
 builder.Services.AddDbContext<NotificationDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("NotificationConnection")));
+    options.UseSqlServer(connectionString));
 
 // Configure Twilio Settings
 builder.Services.Configure<TwilioSettings>(builder.Configuration.GetSection("TwilioSettings"));
@@ -24,7 +28,10 @@ builder.Services.Configure<PushNotificationSettings>(builder.Configuration.GetSe
 var jwtKey = builder.Configuration["Jwt:Key"];
 if (string.IsNullOrEmpty(jwtKey) || jwtKey.Length < 32)
 {
-    jwtKey = "NotificationServiceKey-32-characters-long-!";
+    throw new InvalidOperationException(
+        "JWT signing key 'Jwt:Key' is not configured or is shorter than 32 characters. " +
+        "Set it via User Secrets (dotnet user-secrets set \"Jwt:Key\" \"<key>\") or an environment variable. " +
+        "It must not be committed to appsettings.json.");
 }
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)

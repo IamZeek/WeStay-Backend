@@ -14,7 +14,14 @@ builder.Services.AddSwaggerGen();
 
 // Add JWT Authentication
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
-var secretKey = jwtSettings["Secret"] ?? throw new ArgumentNullException("JwtSettings:Secret");
+var secretKey = jwtSettings["Secret"];
+if (string.IsNullOrEmpty(secretKey) || secretKey.Length < 32)
+{
+    throw new InvalidOperationException(
+        "JWT signing key 'JwtSettings:Secret' is not configured or is shorter than 32 characters. " +
+        "Set it via User Secrets (dotnet user-secrets set \"JwtSettings:Secret\" \"<key>\") or an environment variable. " +
+        "It must not be committed to appsettings.json.");
+}
 
 builder.Services.AddAuthentication(options =>
 {

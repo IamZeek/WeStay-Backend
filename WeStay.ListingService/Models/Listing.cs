@@ -85,6 +85,6 @@ namespace WeStay.ListingService.Models
         // Navigation properties
         public virtual ICollection<Amenity> Amenities { get; set; }
         public virtual ICollection<ListingImage> Images { get; set; }
-        public virtual ICollection<Booking> Bookings { get; set; }
+        // Bookings navigation removed: booking ownership moved to WeStay.BookingService.
     }
 }

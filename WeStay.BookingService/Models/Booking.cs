@@ -62,7 +62,7 @@ namespace WeStay.BookingService.Models
         // Navigation properties
         public virtual ICollection<BookingGuest> Guests { get; set; } = new List<BookingGuest>();
         public virtual ICollection<BookingPayment> Payments { get; set; } = new List<BookingPayment>();
-        public virtual BookingReview Review { get; set; }
+        // Review navigation moved to /Future (Phase 3 — Reviews). Not part of the active model.
     }
 
     public class BookingStatus
@@ -162,38 +162,9 @@ namespace WeStay.BookingService.Models
         public virtual Booking Booking { get; set; }
     }
 
-    public class BookingReview
-    {
-        [Key]
-        public int Id { get; set; }
-
-        [Required]
-        public int BookingId { get; set; }
-
-        [Required]
-        [Range(1, 5)]
-        public int Rating { get; set; } // 1-5 stars
-
-        [MaxLength(200)]
-        public string Title { get; set; }
-
-        [MaxLength(2000)]
-        public string Comment { get; set; }
-
-        [MaxLength(2000)]
-        public string HostResponse { get; set; }
-
-        public bool IsPublished { get; set; } = false;
-
-        [Required]
-        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-
-        [Required]
-        public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
-
-        [ForeignKey("BookingId")]
-        public virtual Booking Booking { get; set; }
-    }
+    // NOTE: BookingReview entity moved to /Future (Phase 3 — Reviews). It is preserved
+    // there but excluded from compilation and from the active DbContext. Do not re-add here
+    // without restoring the DbSet, relationship config, repository, and an EF migration.
 
     // Enums for better type safety (optional - can use string constants instead)
     public enum PaymentStatus

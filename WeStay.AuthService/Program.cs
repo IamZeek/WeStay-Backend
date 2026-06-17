@@ -11,8 +11,12 @@ using WeStay.AuthService.Utilities;
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
+    ?? throw new InvalidOperationException(
+        "Connection string 'DefaultConnection' is not configured. " +
+        "Set it via User Secrets or an environment variable (it must not be committed to appsettings.json).");
 builder.Services.AddDbContext<AuthDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseSqlServer(connectionString));
 
 // Register services
 builder.Services.AddScoped<IAuthService, AuthService>();
@@ -28,8 +32,10 @@ builder.Services.AddScoped<IEmailService, EmailService>();
 var jwtKey = builder.Configuration["Jwt:Key"];
 if (string.IsNullOrEmpty(jwtKey) || jwtKey.Length < 32)
 {
-    // Fallback for development - in production, this should be a proper secret
-    jwtKey = "DefaultDevelopmentKey-32-characters-long!";
+    throw new InvalidOperationException(
+        "JWT signing key 'Jwt:Key' is not configured or is shorter than 32 characters. " +
+        "Set it via User Secrets (dotnet user-secrets set \"Jwt:Key\" \"<key>\") or an environment variable. " +
+        "It must not be committed to appsettings.json.");
 }
 
 builder.Services.AddAuthentication(options =>

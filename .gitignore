@@ -361,3 +361,12 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+
+# Environment-specific app configuration — keep secrets out of source control.
+# Use .NET User Secrets (local dev) or environment variables / Key Vault (deployed).
+# The base appsettings.json is committed as a placeholder-only template.
+appsettings.Development.json
+appsettings.Production.json
+appsettings.*.Local.json
+**/appsettings.Development.json
+**/appsettings.Production.json

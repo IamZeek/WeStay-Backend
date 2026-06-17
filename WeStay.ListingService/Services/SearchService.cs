@@ -80,16 +80,12 @@ namespace WeStay.ListingService.Services
                 query = query.Where(l => l.Amenities.Any(a => request.AmenityIds.Contains(a.Id)));
             }
 
-            // Date availability check
-            if (request.CheckInDate.HasValue && request.CheckOutDate.HasValue)
-            {
-                query = query.Where(l => !l.Bookings.Any(b =>
-                    b.Status != BookingStatus.Cancelled &&
-                    b.Status != BookingStatus.Rejected &&
-                    ((b.CheckInDate <= request.CheckInDate && b.CheckOutDate > request.CheckInDate) ||
-                     (b.CheckInDate < request.CheckOutDate && b.CheckOutDate >= request.CheckOutDate) ||
-                     (b.CheckInDate >= request.CheckInDate && b.CheckOutDate <= request.CheckOutDate))));
-            }
+            // NOTE: Date-availability filtering was removed when booking ownership moved to
+            // WeStay.BookingService (Phase 1 de-duplication). Listings no longer hold booking
+            // data locally, so availability cannot be evaluated here. The CheckInDate/CheckOutDate
+            // request fields are retained but currently not applied. If availability filtering on
+            // search is required, query WeStay.BookingService for unavailable listings/dates and
+            // filter on the result.
 
             // Get total count before pagination
             var totalCount = await query.CountAsync();
@@ -177,11 +173,12 @@ namespace WeStay.ListingService.Services
 
         public async Task<Dictionary<string, int>> GetListingStatsAsync()
         {
+            // NOTE: "totalBookings" was removed when booking ownership moved to
+            // WeStay.BookingService (Phase 1 de-duplication). Booking counts must now be
+            // sourced from WeStay.BookingService.
             var stats = new Dictionary<string, int>
             {
                 ["totalListings"] = await _context.Listings.CountAsync(l => l.Status == ListingStatus.Active),
-                ["totalBookings"] = await _context.Bookings.CountAsync(b =>
-                    b.Status == BookingStatus.Confirmed || b.Status == BookingStatus.Completed),
                 ["activeHosts"] = await _context.Listings
                     .Where(l => l.Status == ListingStatus.Active)
                     .Select(l => l.HostId)

@@ -12,19 +12,25 @@ using WeStay.ListingService.Services;
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
+var connectionString = builder.Configuration.GetConnectionString("ListingDbConnection")
+    ?? throw new InvalidOperationException(
+        "Connection string 'ListingDbConnection' is not configured. " +
+        "Set it via User Secrets or an environment variable (it must not be committed to appsettings.json).");
 builder.Services.AddDbContext<ListingDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("ListingDbConnection")));
+    options.UseSqlServer(connectionString));
 
 // Register services
 builder.Services.AddScoped<IListingService, ListingService>();
-builder.Services.AddScoped<IBookingService, BookingService>();
 builder.Services.AddScoped<ISearchService, SearchService>();
 
 // Configure JWT Authentication
 var jwtKey = builder.Configuration["Jwt:Key"];
 if (string.IsNullOrEmpty(jwtKey) || jwtKey.Length < 32)
 {
-    jwtKey = "ListingServiceKey-32-characters-long-here!";
+    throw new InvalidOperationException(
+        "JWT signing key 'Jwt:Key' is not configured or is shorter than 32 characters. " +
+        "Set it via User Secrets (dotnet user-secrets set \"Jwt:Key\" \"<key>\") or an environment variable. " +
+        "It must not be committed to appsettings.json.");
 }
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)

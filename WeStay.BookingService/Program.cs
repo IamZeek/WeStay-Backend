@@ -11,14 +11,21 @@ using System.Text;
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
+var connectionString = builder.Configuration.GetConnectionString("BookingConnection")
+    ?? throw new InvalidOperationException(
+        "Connection string 'BookingConnection' is not configured. " +
+        "Set it via User Secrets or an environment variable (it must not be committed to appsettings.json).");
 builder.Services.AddDbContext<BookingDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("BookingConnection")));
+    options.UseSqlServer(connectionString));
 
 // Add JWT Authentication
 var jwtKey = builder.Configuration["Jwt:Key"];
 if (string.IsNullOrEmpty(jwtKey) || jwtKey.Length < 32)
 {
-    jwtKey = "BookingServiceKey-32-characters-long-!";
+    throw new InvalidOperationException(
+        "JWT signing key 'Jwt:Key' is not configured or is shorter than 32 characters. " +
+        "Set it via User Secrets (dotnet user-secrets set \"Jwt:Key\" \"<key>\") or an environment variable. " +
+        "It must not be committed to appsettings.json.");
 }
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -40,7 +47,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 builder.Services.AddScoped<IBookingRepository, BookingRepository>();
 builder.Services.AddScoped<IBookingStatusRepository, BookingStatusRepository>();
 builder.Services.AddScoped<IBookingPaymentRepository, BookingPaymentRepository>();
-builder.Services.AddScoped<IBookingReviewRepository, BookingReviewRepository>();
+// IBookingReviewRepository moved to /Future (Phase 3 — Reviews); not registered.
 
 // Register services
 builder.Services.AddScoped<IBookingService,BookingService>();

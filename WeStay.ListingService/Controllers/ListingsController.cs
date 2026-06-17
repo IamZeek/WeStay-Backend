@@ -68,6 +68,32 @@ namespace WeStay.ListingService.Controllers
         }
 
         /// <summary>
+        /// Get the nightly price for a listing. Used by WeStay.BookingService for price lookups
+        /// (GET /api/listings/{id}/price). Returns the bare decimal value in the response body.
+        /// </summary>
+        [HttpGet("{id}/price")]
+        [AllowAnonymous] // Called service-to-service by BookingService without a user token
+        public async Task<IActionResult> GetListingPrice(int id)
+        {
+            try
+            {
+                var listing = await _listingService.GetListingByIdAsync(id);
+                if (listing == null)
+                {
+                    return NotFound(new { Message = "Listing not found" });
+                }
+
+                // BookingService reads the body via decimal.Parse, so return the raw value.
+                return Ok(listing.PricePerNight);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting price for listing {ListingId}", id);
+                return StatusCode(500, new { Message = "An error occurred while retrieving the listing price" });
+            }
+        }
+
+        /// <summary>
         /// Create a new listing
         /// </summary>
         [HttpPost]

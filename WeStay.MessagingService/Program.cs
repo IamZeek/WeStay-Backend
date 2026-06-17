@@ -14,8 +14,12 @@ using WeStay.MessagingService.Settings;
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
+var connectionString = builder.Configuration.GetConnectionString("MessagingConnection")
+    ?? throw new InvalidOperationException(
+        "Connection string 'MessagingConnection' is not configured. " +
+        "Set it via User Secrets or an environment variable (it must not be committed to appsettings.json).");
 builder.Services.AddDbContext<MessagingDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("MessagingConnection")));
+    options.UseSqlServer(connectionString));
 
 // Add SignalR for real-time messaging
 builder.Services.AddSignalR(options =>
@@ -32,7 +36,10 @@ builder.Services.Configure<SmsSettings>(builder.Configuration.GetSection("SmsSet
 var jwtKey = builder.Configuration["Jwt:Key"];
 if (string.IsNullOrEmpty(jwtKey) || jwtKey.Length < 32)
 {
-    jwtKey = "MessagingServiceKey-32-characters-long-!";
+    throw new InvalidOperationException(
+        "JWT signing key 'Jwt:Key' is not configured or is shorter than 32 characters. " +
+        "Set it via User Secrets (dotnet user-secrets set \"Jwt:Key\" \"<key>\") or an environment variable. " +
+        "It must not be committed to appsettings.json.");
 }
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)

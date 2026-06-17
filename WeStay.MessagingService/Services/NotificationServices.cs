@@ -1,103 +1,123 @@
-﻿using Microsoft.Extensions.Options;
+using System.Net.Http.Json;
 using WeStay.MessagingService.Models;
-using WeStay.MessagingService.Settings;
 
 namespace WeStay.MessagingService.Services
 {
+    /// <summary>
+    /// Adapter that delegates notification sending to WeStay.NotificationService (the
+    /// authoritative notification implementation) over direct HTTP. The previous in-process
+    /// stub sending logic (fake Email/SMS/Push sends) was removed in the Phase 1 de-duplication.
+    ///
+    /// Push and broadcast are intentionally NOT delegated: NotificationService does not expose
+    /// trigger endpoints for them yet (only Email and SMS were added). A message bus is intended
+    /// for a later phase — see PROJECT_STATUS.md.
+    /// </summary>
     public class NotificationServices : INotificationServices
     {
-        private readonly EmailSettings _emailSettings;
-        private readonly SmsSettings _smsSettings;
+        private readonly HttpClient _httpClient;
+        private readonly IConfiguration _configuration;
         private readonly ILogger<NotificationServices> _logger;
 
         public NotificationServices(
-            IOptions<EmailSettings> emailSettings,
-            IOptions<SmsSettings> smsSettings,
+            HttpClient httpClient,
+            IConfiguration configuration,
             ILogger<NotificationServices> logger)
         {
-            _emailSettings = emailSettings.Value;
-            _smsSettings = smsSettings.Value;
+            _httpClient = httpClient;
+            _configuration = configuration;
             _logger = logger;
         }
 
         public async Task<bool> SendEmailAsync(EmailMessage emailMessage)
         {
+            var baseUrl = _configuration["Services:NotificationService"];
+            if (string.IsNullOrEmpty(baseUrl))
+            {
+                _logger.LogError("Services:NotificationService is not configured; cannot send email to {To}", emailMessage.To);
+                return false;
+            }
+
             try
             {
-                _logger.LogInformation("Attempting to send email to {To}", emailMessage.To);
+                var payload = new
+                {
+                    ToEmail = emailMessage.To,
+                    emailMessage.Subject,
+                    HtmlContent = emailMessage.Body,
+                    TextContent = (string?)null
+                };
 
-                // Implement your email sending logic here
-                // This could use SMTP, SendGrid, Mailgun, etc.
+                var response = await _httpClient.PostAsJsonAsync($"{baseUrl}/api/notifications/email", payload);
+                if (response.IsSuccessStatusCode)
+                {
+                    _logger.LogInformation("Email delegated to NotificationService for {To}", emailMessage.To);
+                    return true;
+                }
 
-                _logger.LogInformation("Email sent successfully to {To}", emailMessage.To);
-                return true;
+                _logger.LogWarning("NotificationService returned {Status} sending email to {To}",
+                    (int)response.StatusCode, emailMessage.To);
+                return false;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to send email to {To}", emailMessage.To);
+                _logger.LogError(ex, "Failed to delegate email to NotificationService for {To}", emailMessage.To);
                 return false;
             }
         }
 
         public async Task<bool> SendSmsAsync(SmsMessage smsMessage)
         {
+            var baseUrl = _configuration["Services:NotificationService"];
+            if (string.IsNullOrEmpty(baseUrl))
+            {
+                _logger.LogError("Services:NotificationService is not configured; cannot send SMS to {To}", smsMessage.To);
+                return false;
+            }
+
             try
             {
-                _logger.LogInformation("Attempting to send SMS to {To}", smsMessage.To);
+                var payload = new
+                {
+                    PhoneNumber = smsMessage.To,
+                    smsMessage.Message
+                };
 
-                // Implement your SMS sending logic here
-                // This could use Twilio, Nexmo, etc.
+                var response = await _httpClient.PostAsJsonAsync($"{baseUrl}/api/notifications/sms", payload);
+                if (response.IsSuccessStatusCode)
+                {
+                    _logger.LogInformation("SMS delegated to NotificationService for {To}", smsMessage.To);
+                    return true;
+                }
 
-                _logger.LogInformation("SMS sent successfully to {To}", smsMessage.To);
-                return true;
+                _logger.LogWarning("NotificationService returned {Status} sending SMS to {To}",
+                    (int)response.StatusCode, smsMessage.To);
+                return false;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to send SMS to {To}", smsMessage.To);
+                _logger.LogError(ex, "Failed to delegate SMS to NotificationService for {To}", smsMessage.To);
                 return false;
             }
         }
 
-        public async Task<bool> SendPushNotificationAsync(PushNotification pushNotification)
+        public Task<bool> SendPushNotificationAsync(PushNotification pushNotification)
         {
-            try
-            {
-                _logger.LogInformation("Attempting to send push notification to device {DeviceToken}",
-                    pushNotification.DeviceToken);
-
-                // Implement your push notification logic here
-                // This could use Firebase Cloud Messaging, Apple Push Notification Service, etc.
-
-                _logger.LogInformation("Push notification sent successfully");
-                return true;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to send push notification");
-                return false;
-            }
+            // Not delegated: NotificationService does not expose a push trigger endpoint yet.
+            // Returning false (rather than a fake success) until push is wired up.
+            _logger.LogWarning(
+                "Push notification requested for device {DeviceToken} but NotificationService has no push endpoint yet; skipping.",
+                pushNotification.DeviceToken);
+            return Task.FromResult(false);
         }
 
-        public async Task<bool> SendBroadcastNotificationAsync(BroadcastMessage broadcastMessage)
+        public Task<bool> SendBroadcastNotificationAsync(BroadcastMessage broadcastMessage)
         {
-            try
-            {
-                _logger.LogInformation("Attempting to send broadcast to channel {Channel}",
-                    broadcastMessage.Channel);
-
-                // Implement your broadcast logic here
-                // This could use SignalR, Redis pub/sub, etc.
-
-                _logger.LogInformation("Broadcast sent successfully to channel {Channel}",
-                    broadcastMessage.Channel);
-                return true;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to send broadcast to channel {Channel}",
-                    broadcastMessage.Channel);
-                return false;
-            }
+            // Broadcast remains a MessagingService concern (SignalR) and is not delegated to
+            // NotificationService. Real broadcast delivery is not implemented yet.
+            _logger.LogWarning(
+                "Broadcast requested for channel {Channel} but broadcast delivery is not implemented yet; skipping.",
+                broadcastMessage.Channel);
+            return Task.FromResult(false);
         }
     }
 }

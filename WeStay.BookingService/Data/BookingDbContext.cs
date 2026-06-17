@@ -15,7 +15,7 @@ namespace WeStay.BookingService.Data
         public DbSet<BookingStatus> BookingStatuses { get; set; }
         public DbSet<BookingGuest> BookingGuests { get; set; }
         public DbSet<BookingPayment> BookingPayments { get; set; }
-        public DbSet<BookingReview> BookingReviews { get; set; }
+        // BookingReviews DbSet moved to /Future (Phase 3 — Reviews). Excluded from the active model.
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -37,11 +37,7 @@ namespace WeStay.BookingService.Data
                 .HasForeignKey(bp => bp.BookingId)
                 .OnDelete(DeleteBehavior.Cascade);
 
-            modelBuilder.Entity<BookingReview>()
-                .HasOne(br => br.Booking)
-                .WithOne(b => b.Review)
-                .HasForeignKey<BookingReview>(br => br.BookingId)
-                .OnDelete(DeleteBehavior.Cascade);
+            // BookingReview relationship moved to /Future (Phase 3 — Reviews).
 
             // Create indexes
             modelBuilder.Entity<Booking>()

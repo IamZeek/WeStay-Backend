@@ -61,14 +61,15 @@
       }
     },
 
-    // BookingService routes
+    // BookingService routes — repointed to WeStay.BookingService (port 7292) after
+    // booking endpoints were removed from ListingService in the Phase 1 de-duplication.
     {
-      "DownstreamPathTemplate": "/api/{everything}",
+      "DownstreamPathTemplate": "/api/bookings/{everything}",
       "DownstreamScheme": "https",
       "DownstreamHostAndPorts": [
         {
           "Host": "localhost",
-          "Port": 7002
+          "Port": 7292
         }
       ],
       "UpstreamPathTemplate": "/api/bookings/{everything}",
