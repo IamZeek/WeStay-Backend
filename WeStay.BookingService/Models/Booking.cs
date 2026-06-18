@@ -45,11 +45,13 @@ namespace WeStay.BookingService.Models
         [ForeignKey("StatusId")]
         public virtual BookingStatus Status { get; set; }
 
+        // These columns are NOT NULL (non-nullable strings) but are optional at creation time
+        // (CancellationReason is only set on cancel). Default to empty to avoid NULL-insert failures.
         [MaxLength(1000)]
-        public string SpecialRequests { get; set; }
+        public string SpecialRequests { get; set; } = string.Empty;
 
         [MaxLength(500)]
-        public string CancellationReason { get; set; }
+        public string CancellationReason { get; set; } = string.Empty;
 
         public DateTime? CancelledAt { get; set; }
 

@@ -26,8 +26,10 @@ namespace WeStay.BookingService.Repositories
 
         public async Task<BookingStatus> GetStatusByNameAsync(string name)
         {
+            // EF can't translate string.Equals(StringComparison) to SQL. Use a simple equality,
+            // which SQL Server evaluates case-insensitively under the default collation.
             return await _context.BookingStatuses
-                .FirstOrDefaultAsync(s => s.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+                .FirstOrDefaultAsync(s => s.Name == name);
         }
     }
 }

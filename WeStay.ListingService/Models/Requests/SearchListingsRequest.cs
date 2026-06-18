@@ -4,7 +4,9 @@ namespace WeStay.ListingService.Models.Requests
 {
     public class SearchListingsRequest
     {
-        public string Location { get; set; }
+        // Nullable so it isn't treated as implicitly-required by [ApiController] + nullable refs
+        // (location is an optional search filter).
+        public string? Location { get; set; }
         public DateTime? CheckInDate { get; set; }
         public DateTime? CheckOutDate { get; set; }
         public int? Guests { get; set; }

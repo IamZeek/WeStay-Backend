@@ -38,7 +38,7 @@ if (string.IsNullOrEmpty(jwtKey) || jwtKey.Length < 32)
         "It must not be committed to appsettings.json.");
 }
 
-builder.Services.AddAuthentication(options =>
+var authBuilder = builder.Services.AddAuthentication(options =>
 {
     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
     options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -56,28 +56,30 @@ builder.Services.AddAuthentication(options =>
         ValidAudience = builder.Configuration["Jwt:Audience"] ?? "WeStayUsers",
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
     };
-})
-.AddGoogle(options =>
-{
-    options.ClientId = builder.Configuration["Authentication:Google:ClientId"];
-    options.ClientSecret = builder.Configuration["Authentication:Google:ClientSecret"];
-    options.SaveTokens = true;
-    options.Scope.Add("profile");
-    options.Scope.Add("email");
-    options.ClaimActions.MapJsonKey("picture", "picture");
-})
-.AddFacebook(options =>
-{
-    options.AppId = builder.Configuration["Authentication:Facebook:AppId"];
-    options.AppSecret = builder.Configuration["Authentication:Facebook:AppSecret"];
-    options.SaveTokens = true;
-    options.Scope.Add("public_profile");
-    options.Scope.Add("email");
-    options.Fields.Add("name");
-    options.Fields.Add("email");
-    options.Fields.Add("picture");
-    options.ClaimActions.MapJsonKey("picture", "picture", "url");
 });
+
+// Google OAuth is registered ONLY when its credentials are configured.
+// Google is a remote (IAuthenticationRequestHandler) scheme: app.UseAuthentication() initializes
+// every such scheme on EVERY request (to let it handle its callback path), and that initialization
+// runs OAuthOptions.Validate(). So if Google is registered without a ClientId/ClientSecret, its
+// validation throws on every request and returns 500 for ALL endpoints (including
+// /api/auth/register), not just OAuth ones. Gating registration on config presence keeps Google
+// available (it lights up automatically once the secrets are set) without breaking the rest of the
+// API when it isn't configured yet.
+var googleClientId = builder.Configuration["Authentication:Google:ClientId"];
+var googleClientSecret = builder.Configuration["Authentication:Google:ClientSecret"];
+if (!string.IsNullOrWhiteSpace(googleClientId) && !string.IsNullOrWhiteSpace(googleClientSecret))
+{
+    authBuilder.AddGoogle(options =>
+    {
+        options.ClientId = googleClientId;
+        options.ClientSecret = googleClientSecret;
+        options.SaveTokens = true;
+        options.Scope.Add("profile");
+        options.Scope.Add("email");
+        options.ClaimActions.MapJsonKey("picture", "picture");
+    });
+}
 
 builder.Services.AddAuthorization(options =>
 {
@@ -90,7 +92,7 @@ builder.Services.AddMemoryCache();
 builder.Services.AddControllers();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
-//builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen();
 
 
 var app = builder.Build();

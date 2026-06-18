@@ -20,8 +20,10 @@ namespace WeStay.ListingService.Models
         [MaxLength(500)]
         public string ImageUrl { get; set; }
 
+        // The DB column is NOT NULL (non-nullable string), but listing creation supplies only
+        // image URLs (no captions), so default to empty to avoid a NULL-insert failure.
         [MaxLength(200)]
-        public string Caption { get; set; }
+        public string Caption { get; set; } = string.Empty;
 
         public bool IsPrimary { get; set; }
 

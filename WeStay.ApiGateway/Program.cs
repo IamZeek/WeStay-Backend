@@ -114,7 +114,6 @@ builder.Services.AddHealthChecks();
 // requests carry no MVC endpoint metadata, so GetEndpoint() returned null and the auth check was
 // skipped. JWT validation is handled by Ocelot's per-route "AuthenticationOptions" (the "Bearer"
 // scheme configured above), which is the idiomatic Ocelot approach.
-builder.Services.AddTransient<LoggingMiddleware>();
 
 var app = builder.Build();
 

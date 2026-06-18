@@ -152,16 +152,25 @@ namespace WeStay.AuthService.Controllers
         }
         
         [HttpGet("external-login")]
-        public IActionResult ExternalLogin([FromQuery] string provider, [FromQuery] string returnUrl = null)
+        public async Task<IActionResult> ExternalLogin(
+            [FromServices] IAuthenticationSchemeProvider schemeProvider,
+            [FromQuery] string provider,
+            [FromQuery] string returnUrl = null)
         {
             try
             {
-                // Validate provider
-                if (string.IsNullOrEmpty(provider) ||
-                    (!provider.Equals("Google", StringComparison.OrdinalIgnoreCase) &&
-                     !provider.Equals("Facebook", StringComparison.OrdinalIgnoreCase)))
+                // Google is the only supported external provider.
+                if (string.IsNullOrWhiteSpace(provider) || !provider.Equals("Google", StringComparison.OrdinalIgnoreCase))
                 {
-                    return BadRequest(new { Message = "Invalid authentication provider. Supported providers: Google, Facebook" });
+                    return BadRequest(new { Message = "Unsupported authentication provider. Supported providers: Google" });
+                }
+
+                // The provider's auth scheme is only registered when its credentials are configured.
+                // If it isn't, return a clean 400 instead of a 500 from Challenge().
+                var scheme = await schemeProvider.GetSchemeAsync("Google");
+                if (scheme == null)
+                {
+                    return BadRequest(new { Message = "Google login is not configured on the server." });
                 }
 
                 // Create redirect URL for callback
@@ -169,11 +178,11 @@ namespace WeStay.AuthService.Controllers
                 var properties = new AuthenticationProperties
                 {
                     RedirectUri = redirectUrl,
-                    Items = { { "LoginProvider", provider } }
+                    Items = { { "LoginProvider", "Google" } }
                 };
 
                 // Challenge the external provider
-                return Challenge(properties, provider);
+                return Challenge(properties, "Google");
             }
             catch (Exception ex)
             {
