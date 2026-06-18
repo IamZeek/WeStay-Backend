@@ -39,5 +39,13 @@ namespace WeStay.Tests.Infrastructure
             response.EnsureSuccessStatusCode();
             return await Json.ReadAsync<ListingDto>(response);
         }
+
+        public static async Task<int> CreateBookingAsync(ApiClient api, string token, int listingId, int numberOfGuests = 2)
+        {
+            var response = await api.PostAsync("/api/bookings", TestData.BookingBody(listingId, numberOfGuests), token);
+            response.EnsureSuccessStatusCode();
+            var envelope = await Json.ReadAsync<BookingCreatedEnvelope>(response);
+            return envelope.Booking.Id;
+        }
     }
 }

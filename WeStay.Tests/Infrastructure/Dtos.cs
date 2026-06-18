@@ -29,4 +29,12 @@ namespace WeStay.Tests.Infrastructure
     public record CalendarDay(DateTime Date, bool IsAvailable);
 
     public record CalendarResponse(int ListingId, List<CalendarDay> Calendar);
+
+    // Booking create response: { message, booking: { id, bookingCode, status, ... } }
+    public record BookingCreatedEnvelope(BookingCreated Booking);
+    public record BookingCreated(int Id, string BookingCode, string Status);
+
+    // Confirm/reject response: { message, booking: { id, status, ... } }
+    public record BookingActionResponse(string Message, BookingActionBooking Booking);
+    public record BookingActionBooking(int Id, string Status);
 }

@@ -128,13 +128,10 @@ namespace WeStay.BookingService.Services
             return await _bookingRepository.UpdateBookingAsync(booking);
         }
 
-        public async Task<Booking> ConfirmBookingAsync(int bookingId)
+        public async Task<Booking> ConfirmBookingAsync(int bookingId, int requestingUserId, bool isAdmin)
         {
-            var booking = await _bookingRepository.GetBookingByIdAsync(bookingId);
-            if (booking == null)
-            {
-                throw new KeyNotFoundException("Booking not found");
-            }
+            var booking = await GetBookingForHostActionAsync(bookingId, requestingUserId, isAdmin);
+            EnsurePending(booking, "confirmed");
 
             var confirmedStatus = await _statusRepository.GetStatusByNameAsync("Confirmed");
             if (confirmedStatus == null)
@@ -143,8 +140,66 @@ namespace WeStay.BookingService.Services
             }
 
             booking.StatusId = confirmedStatus.Id;
+            await _bookingRepository.UpdateBookingAsync(booking);
 
-            return await _bookingRepository.UpdateBookingAsync(booking);
+            // Re-fetch so the returned booking carries the fresh Status navigation.
+            return await _bookingRepository.GetBookingByIdAsync(bookingId);
+        }
+
+        public async Task<Booking> RejectBookingAsync(int bookingId, int requestingUserId, bool isAdmin, string reason)
+        {
+            var booking = await GetBookingForHostActionAsync(bookingId, requestingUserId, isAdmin);
+            EnsurePending(booking, "rejected");
+
+            var rejectedStatus = await _statusRepository.GetStatusByNameAsync("Rejected");
+            if (rejectedStatus == null)
+            {
+                throw new InvalidOperationException("Booking status configuration error");
+            }
+
+            booking.StatusId = rejectedStatus.Id;
+            booking.CancellationReason = reason ?? string.Empty;
+            booking.CancelledAt = DateTime.UtcNow;
+            await _bookingRepository.UpdateBookingAsync(booking);
+
+            return await _bookingRepository.GetBookingByIdAsync(bookingId);
+        }
+
+        // Loads a booking and verifies the caller is the host that owns the booking's listing
+        // (or an Admin). Ownership is checked against ListingService over HTTP, reusing the same
+        // HttpClient pattern as price/capacity lookups.
+        private async Task<Booking> GetBookingForHostActionAsync(int bookingId, int requestingUserId, bool isAdmin)
+        {
+            var booking = await _bookingRepository.GetBookingByIdAsync(bookingId);
+            if (booking == null)
+            {
+                throw new KeyNotFoundException("Booking not found");
+            }
+
+            if (!isAdmin)
+            {
+                var hostId = await GetListingHostIdAsync(booking.ListingId);
+                if (hostId == null)
+                {
+                    throw new InvalidOperationException("Unable to verify listing ownership at this time.");
+                }
+                if (hostId.Value != requestingUserId)
+                {
+                    throw new UnauthorizedAccessException("Only the host who owns the listing can perform this action.");
+                }
+            }
+
+            return booking;
+        }
+
+        private static void EnsurePending(Booking booking, string action)
+        {
+            var current = booking.Status?.Name ?? "Unknown";
+            if (!string.Equals(current, "Pending", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    $"Booking cannot be {action} because its status is '{current}'. Only pending bookings can be {action}.");
+            }
         }
 
         public async Task<bool> IsListingAvailableAsync(int listingId, DateTime checkInDate, DateTime checkOutDate, int? excludeBookingId = null)
@@ -209,6 +264,32 @@ namespace WeStay.BookingService.Services
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error getting listing capacity for ID: {ListingId}", listingId);
+                return null;
+            }
+        }
+
+        private async Task<int?> GetListingHostIdAsync(int listingId)
+        {
+            try
+            {
+                var listingServiceUrl = _configuration["Services:ListingService"];
+                var response = await _httpClient.GetAsync($"{listingServiceUrl}/api/listings/{listingId}/owner");
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var content = await response.Content.ReadAsStringAsync();
+                    if (int.TryParse(content, out var hostId))
+                    {
+                        return hostId;
+                    }
+                }
+
+                _logger.LogWarning("Failed to get listing owner for ID: {ListingId}", listingId);
+                return null;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting listing owner for ID: {ListingId}", listingId);
                 return null;
             }
         }

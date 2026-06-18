@@ -35,7 +35,7 @@ namespace WeStay.BookingService.Services
             var unavailableDates = new List<DateTime>();
             var bookings = await _bookingRepository.GetBookingsByListingIdAsync(listingId);
 
-            foreach (var booking in bookings.Where(b => b.StatusId != 3 && b.StatusId != 5)) // Not cancelled or refunded
+            foreach (var booking in bookings.Where(b => b.StatusId != 3 && b.StatusId != 5 && b.StatusId != 6)) // Not cancelled, refunded, or rejected
             {
                 for (var date = booking.CheckInDate; date < booking.CheckOutDate; date = date.AddDays(1))
                 {

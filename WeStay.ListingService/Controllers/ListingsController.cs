@@ -121,6 +121,32 @@ namespace WeStay.ListingService.Controllers
         }
 
         /// <summary>
+        /// Get the owner (HostId) of a listing. Used by WeStay.BookingService to verify a host owns
+        /// the listing before confirming/rejecting its bookings (GET /api/listings/{id}/owner).
+        /// Returns the bare integer HostId.
+        /// </summary>
+        [HttpGet("{id}/owner")]
+        [AllowAnonymous] // Called service-to-service by BookingService without a user token
+        public async Task<IActionResult> GetListingOwner(int id)
+        {
+            try
+            {
+                var hostId = await _listingService.GetHostIdAsync(id);
+                if (hostId == null)
+                {
+                    return NotFound(new { Message = "Listing not found" });
+                }
+
+                return Ok(hostId.Value);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting owner for listing {ListingId}", id);
+                return StatusCode(500, new { Message = "An error occurred while retrieving the listing owner" });
+            }
+        }
+
+        /// <summary>
         /// Upload a listing image to blob storage and return its public URL.
         /// The returned URL is then passed in CreateListing/UpdateListing's ImageUrls
         /// (stored as ListingImage.ImageUrl). Multipart/form-data field name: "file".

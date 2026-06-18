@@ -267,6 +267,76 @@ namespace WeStay.BookingService.Controllers
             }
         }
 
+        /// <summary>
+        /// Confirm a pending booking. Only the host that owns the booking's listing (or an Admin)
+        /// may confirm, and only while the booking is still Pending.
+        /// </summary>
+        [HttpPost("{id}/confirm")]
+        public async Task<IActionResult> ConfirmBooking(int id)
+        {
+            try
+            {
+                var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
+                var isAdmin = User.IsInRole("Admin");
+
+                var booking = await _bookingService.ConfirmBookingAsync(id, userId, isAdmin);
+
+                return Ok(new { Message = "Booking confirmed successfully", Booking = MapToBookingResponse(booking) });
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { Message = ex.Message });
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                return StatusCode(403, new { Message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { Message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error confirming booking {BookingId}", id);
+                return StatusCode(500, new { Message = "An error occurred while confirming booking" });
+            }
+        }
+
+        /// <summary>
+        /// Reject a pending booking. Only the host that owns the booking's listing (or an Admin)
+        /// may reject, and only while the booking is still Pending. Reason is optional.
+        /// </summary>
+        [HttpPost("{id}/reject")]
+        public async Task<IActionResult> RejectBooking(int id, [FromBody(EmptyBodyBehavior = Microsoft.AspNetCore.Mvc.ModelBinding.EmptyBodyBehavior.Allow)] RejectBookingRequest request)
+        {
+            try
+            {
+                var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
+                var isAdmin = User.IsInRole("Admin");
+
+                var booking = await _bookingService.RejectBookingAsync(id, userId, isAdmin, request?.Reason);
+
+                return Ok(new { Message = "Booking rejected successfully", Booking = MapToBookingResponse(booking) });
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { Message = ex.Message });
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                return StatusCode(403, new { Message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { Message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error rejecting booking {BookingId}", id);
+                return StatusCode(500, new { Message = "An error occurred while rejecting booking" });
+            }
+        }
+
         private BookingResponse MapToBookingResponse(Booking booking)
         {
             return new BookingResponse
@@ -304,6 +374,12 @@ namespace WeStay.BookingService.Controllers
     public class CancelBookingRequest
     {
         [Required]
+        public string Reason { get; set; }
+    }
+
+    public class RejectBookingRequest
+    {
+        // Optional — a host may reject without giving a reason.
         public string Reason { get; set; }
     }
 }

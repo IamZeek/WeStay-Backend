@@ -74,7 +74,8 @@ namespace WeStay.BookingService.Data
                 new BookingStatus { Id = 2, Name = "Confirmed", Description = "Booking is confirmed and active" },
                 new BookingStatus { Id = 3, Name = "Cancelled", Description = "Booking has been cancelled" },
                 new BookingStatus { Id = 4, Name = "Completed", Description = "Booking has been completed successfully" },
-                new BookingStatus { Id = 5, Name = "Refunded", Description = "Booking was cancelled and refunded" }
+                new BookingStatus { Id = 5, Name = "Refunded", Description = "Booking was cancelled and refunded" },
+                new BookingStatus { Id = 6, Name = "Rejected", Description = "Booking was rejected by the host" }
             );
         }
     }

@@ -29,6 +29,16 @@ namespace WeStay.ListingService.Services
                 .FirstOrDefaultAsync(l => l.Id == id && l.Status == ListingStatus.Active);
         }
 
+        public async Task<int?> GetHostIdAsync(int listingId)
+        {
+            // Ownership lookup for service-to-service checks (e.g. BookingService confirm/reject).
+            // Not filtered by status, so a host can still act on bookings if the listing is inactive.
+            return await _context.Listings
+                .Where(l => l.Id == listingId)
+                .Select(l => (int?)l.HostId)
+                .FirstOrDefaultAsync();
+        }
+
         public async Task<IEnumerable<Listing>> GetListingsByHostIdAsync(int hostId)
         {
             return await _context.Listings

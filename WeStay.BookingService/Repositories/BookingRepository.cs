@@ -111,6 +111,7 @@ namespace WeStay.BookingService.Repositories
                 .Where(b => b.ListingId == listingId &&
                            b.StatusId != 3 && // Not cancelled
                            b.StatusId != 5 && // Not refunded
+                           b.StatusId != 6 && // Not rejected
                            ((b.CheckInDate <= checkOutDate && b.CheckOutDate >= checkInDate)))
                 .ToListAsync();
 
