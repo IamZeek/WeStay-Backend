@@ -53,6 +53,10 @@ builder.Services.AddScoped<IBookingPaymentRepository, BookingPaymentRepository>(
 builder.Services.AddScoped<IBookingService,BookingService>();
 builder.Services.AddScoped<IAvailabilityService, AvailabilityService>();
 
+// Background jobs for automatic booking state transitions (intervals/window in the "Booking" config).
+builder.Services.AddHostedService<BookingCompletionService>();
+builder.Services.AddHostedService<BookingExpiryService>();
+
 builder.Services.AddControllers();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();

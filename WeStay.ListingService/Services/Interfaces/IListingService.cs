@@ -15,5 +15,6 @@ namespace WeStay.ListingService.Services.Interfaces
         Task<bool> ChangeListingStatusAsync(int listingId, int hostId, ListingStatus status);
         Task<bool> SetFeaturedStatusAsync(int listingId, int requestingUserId, bool isAdmin, bool isFeatured, DateTime? featuredUntil);
         Task<int?> GetHostIdAsync(int listingId);
+        Task<bool> UpdateRatingAsync(int listingId, double averageRating, int reviewCount);
     }
 }

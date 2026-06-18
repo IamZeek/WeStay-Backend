@@ -13,5 +13,7 @@ namespace WeStay.BookingService.Repositories.Interfaces
         Task<Booking> UpdateBookingAsync(Booking booking);
         Task<bool> DeleteBookingAsync(int id);
         Task<bool> IsListingAvailableAsync(int listingId, DateTime checkInDate, DateTime checkOutDate, int? excludeBookingId = null);
+        Task<List<int>> GetBookingIdsByStatusPastCheckoutAsync(int statusId, DateTime asOfUtc);
+        Task<List<int>> GetBookingIdsByStatusCreatedBeforeAsync(int statusId, DateTime cutoffUtc);
     }
 }

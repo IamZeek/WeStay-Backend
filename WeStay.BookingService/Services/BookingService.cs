@@ -131,7 +131,7 @@ namespace WeStay.BookingService.Services
         public async Task<Booking> ConfirmBookingAsync(int bookingId, int requestingUserId, bool isAdmin)
         {
             var booking = await GetBookingForHostActionAsync(bookingId, requestingUserId, isAdmin);
-            EnsurePending(booking, "confirmed");
+            EnsureStatus(booking, "Pending", "confirmed");
 
             var confirmedStatus = await _statusRepository.GetStatusByNameAsync("Confirmed");
             if (confirmedStatus == null)
@@ -149,7 +149,7 @@ namespace WeStay.BookingService.Services
         public async Task<Booking> RejectBookingAsync(int bookingId, int requestingUserId, bool isAdmin, string reason)
         {
             var booking = await GetBookingForHostActionAsync(bookingId, requestingUserId, isAdmin);
-            EnsurePending(booking, "rejected");
+            EnsureStatus(booking, "Pending", "rejected");
 
             var rejectedStatus = await _statusRepository.GetStatusByNameAsync("Rejected");
             if (rejectedStatus == null)
@@ -160,6 +160,23 @@ namespace WeStay.BookingService.Services
             booking.StatusId = rejectedStatus.Id;
             booking.CancellationReason = reason ?? string.Empty;
             booking.CancelledAt = DateTime.UtcNow;
+            await _bookingRepository.UpdateBookingAsync(booking);
+
+            return await _bookingRepository.GetBookingByIdAsync(bookingId);
+        }
+
+        public async Task<Booking> CompleteBookingAsync(int bookingId, int requestingUserId, bool isAdmin)
+        {
+            var booking = await GetBookingForHostActionAsync(bookingId, requestingUserId, isAdmin);
+            EnsureStatus(booking, "Confirmed", "completed");
+
+            var completedStatus = await _statusRepository.GetStatusByNameAsync("Completed");
+            if (completedStatus == null)
+            {
+                throw new InvalidOperationException("Booking status configuration error");
+            }
+
+            booking.StatusId = completedStatus.Id;
             await _bookingRepository.UpdateBookingAsync(booking);
 
             return await _bookingRepository.GetBookingByIdAsync(bookingId);
@@ -192,14 +209,81 @@ namespace WeStay.BookingService.Services
             return booking;
         }
 
-        private static void EnsurePending(Booking booking, string action)
+        private static void EnsureStatus(Booking booking, string expectedStatus, string action)
         {
             var current = booking.Status?.Name ?? "Unknown";
-            if (!string.Equals(current, "Pending", StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(current, expectedStatus, StringComparison.OrdinalIgnoreCase))
             {
                 throw new InvalidOperationException(
-                    $"Booking cannot be {action} because its status is '{current}'. Only pending bookings can be {action}.");
+                    $"Booking cannot be {action} because its status is '{current}'. Only '{expectedStatus}' bookings can be {action}.");
             }
+        }
+
+        // Auto-complete: Confirmed bookings whose checkout has passed → Completed.
+        // Reuses CompleteBookingAsync (acting as the system, isAdmin: true → skips ownership).
+        public async Task<int> AutoCompleteExpiredBookingsAsync(DateTime asOfUtc)
+        {
+            var confirmed = await _statusRepository.GetStatusByNameAsync("Confirmed");
+            if (confirmed == null)
+            {
+                _logger.LogError("Auto-complete batch aborted: 'Confirmed' status not found.");
+                return 0;
+            }
+
+            var ids = await _bookingRepository.GetBookingIdsByStatusPastCheckoutAsync(confirmed.Id, asOfUtc);
+            var completed = 0;
+            foreach (var id in ids)
+            {
+                try
+                {
+                    var booking = await CompleteBookingAsync(id, requestingUserId: 0, isAdmin: true);
+                    completed++;
+                    _logger.LogInformation(
+                        "Auto-completed booking {BookingId} (listing {ListingId}, checkout {CheckOutDate:u})",
+                        booking.Id, booking.ListingId, booking.CheckOutDate);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Auto-complete failed for booking {BookingId}", id);
+                }
+            }
+
+            return completed;
+        }
+
+        // Auto-cancel: Pending bookings the host never confirmed within the configured window → Cancelled.
+        public async Task<int> AutoCancelUnconfirmedBookingsAsync(DateTime asOfUtc)
+        {
+            var pending = await _statusRepository.GetStatusByNameAsync("Pending");
+            if (pending == null)
+            {
+                _logger.LogError("Auto-cancel batch aborted: 'Pending' status not found.");
+                return 0;
+            }
+
+            var windowHours = int.TryParse(_configuration["Booking:AutoCancelPendingHours"], out var h) ? h : 24;
+            var cutoffUtc = asOfUtc.AddHours(-windowHours);
+            var reason = $"Auto-cancelled: host did not confirm within {windowHours} hours";
+
+            var ids = await _bookingRepository.GetBookingIdsByStatusCreatedBeforeAsync(pending.Id, cutoffUtc);
+            var cancelled = 0;
+            foreach (var id in ids)
+            {
+                try
+                {
+                    var booking = await CancelBookingAsync(id, reason);
+                    cancelled++;
+                    _logger.LogInformation(
+                        "Auto-cancelled booking {BookingId} (listing {ListingId}, created {CreatedAt:u})",
+                        booking.Id, booking.ListingId, booking.CreatedAt);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Auto-cancel failed for booking {BookingId}", id);
+                }
+            }
+
+            return cancelled;
         }
 
         public async Task<bool> IsListingAvailableAsync(int listingId, DateTime checkInDate, DateTime checkOutDate, int? excludeBookingId = null)

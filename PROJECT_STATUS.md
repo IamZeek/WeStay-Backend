@@ -1,9 +1,9 @@
 # WeStay Backend — Project Status
 
-**Last verified:** 2026-06-18
-**Basis:** Inspected directly against current source code and the live remote SQL Server (all five databases). This document **replaces** the earlier audit, which was outdated after the work completed on 2026-06-17/18.
+**Last verified:** 2026-06-19
+**Basis:** Inspected directly against current source code and the live remote SQL Server (all six databases). Supersedes earlier versions.
 
-The solution has 6 active services plus an empty shared library and an unbuilt ReviewService. Each data-owning service now has its **own dedicated database**, schema is managed by **EF Core migrations** (no `EnsureCreated()`), JWT is unified across services and the gateway, and an HTTP-level integration test suite (`WeStay.Tests`) passes 22/22.
+**6 active services**, each with its **own database** and EF Core **migrations** (no `EnsureCreated()` anywhere). JWT is unified across services and the gateway. An HTTP-level integration test suite (`WeStay.Tests`, through the gateway) passes **36/36**.
 
 ## Database map
 
@@ -14,35 +14,33 @@ The solution has 6 active services plus an empty shared library and an unbuilt R
 | WeStay.BookingService | `WeStayBooking` |
 | WeStay.MessagingService | `WeStayMessaging` |
 | WeStay.NotificationService | `WeStayNotification` |
+| WeStay.ReviewService | `WeStayReview` |
 | WeStay.ApiGateway | none (routing only) |
-| WeStay.ReviewService | none (not built — default template) |
 | WeStay.Common | none (empty shared library) |
 
 ---
 
 ## 1. AuthService (`WeStayAuth`)
 
-**Endpoints** (`AuthController` — no class-level `[Authorize]`; anonymous unless marked):
+**Endpoints** (`AuthController` — anonymous unless marked):
 
 | Method | Route | Auth |
 |---|---|---|
 | POST | `/api/auth/register` | Anonymous |
 | POST | `/api/auth/login` | Anonymous |
-| GET | `/api/auth/external-login` | Anonymous (Google only) |
-| GET | `/api/auth/external-login-callback` | Anonymous |
+| GET | `/api/auth/external-login` / `external-login-callback` | Anonymous (Google only) |
 | GET | `/api/auth/profile` | Authenticated |
 | POST | `/api/auth/change-password` | Authenticated |
-| POST | `/api/auth/become-host` | Authenticated (Guest → Host self-service; returns fresh token) |
+| POST | `/api/auth/become-host` | Authenticated (Guest → Host; returns fresh token) |
 | PUT | `/api/auth/users/{id}/role` | **Admin** |
 | PUT | `/api/auth/verification-update` | Authenticated |
-| POST | `/api/auth/send-otp-phone` / `verify-otp-phone` | Authenticated |
-| POST | `/api/auth/send-otp-email` / `verify-otp-email` | Authenticated |
+| POST | `/api/auth/send-otp-phone` / `verify-otp-phone` / `send-otp-email` / `verify-otp-email` | Authenticated |
 
-**Functional status:** all endpoints implemented and working. JWT carries a `role` claim (Guest/Host/Admin). Google OAuth is **conditional** (registered only when `Authentication:Google:*` is configured); Facebook OAuth has been fully removed. No stubs.
+JWT carries a `role` claim (Guest/Host/Admin). Google OAuth is conditional (registered only when configured); Facebook removed. No stubs. Smells: phone-OTP stored in-memory (no TTL); `verify-otp-phone` binds `dynamic`.
 
-**Known smells:** phone-OTP is stored in an in-memory dictionary (no TTL/persistence, lost on restart); `verify-otp-phone` binds a `dynamic` request body.
+**Admin seed:** on startup AuthService idempotently ensures an admin user exists (creates it, or promotes an existing user with that email to Admin). Config keys: `AdminSeed:Email` (default `admin@westay.local`) and `AdminSeed:Password`. In **Development** a dev-default password (`Admin123!`) is used so the app/tests have an admin out of the box; in **other environments** the admin is seeded **only** when `AdminSeed:Password` is explicitly configured — a default-password admin is never seeded in production. Override both via User Secrets / env vars.
 
-**Schema:** `Users` (Email, PasswordHash, names, ProfilePicture, DateOfBirth, PhoneNumber, `IsActive`, **`Role int`**, `IsEmailVerified`/`IsPhoneNoVerified`, external-login fields, CreatedAt/UpdatedAt), `ExternalLogins` (UserId, Provider, ProviderKey), `Verifications` (UserId, DocumentType, DocumentNumber, ImageUrl, Status, VerifiedAt, RejectionReason). Migrations: `AddInitialMigrtion`, `AddUserRole`.
+**Schema:** `Users` (incl. `Role`, verification flags, external-login fields), `ExternalLogins`, `Verifications`. Migrations: `AddInitialMigrtion`, `AddUserRole`.
 
 ---
 
@@ -52,10 +50,12 @@ The solution has 6 active services plus an empty shared library and an unbuilt R
 
 | Method | Route | Auth |
 |---|---|---|
-| GET | `/api/listings` | Authenticated (host's own listings) |
+| GET | `/api/listings` | Authenticated (host's own) |
 | GET | `/api/listings/{id}` | Anonymous |
 | GET | `/api/listings/{id}/price` | Anonymous (service-to-service) |
 | GET | `/api/listings/{id}/capacity` | Anonymous (service-to-service) |
+| GET | `/api/listings/{id}/owner` | Anonymous (service-to-service) |
+| PUT | `/api/listings/{id}/rating` | Anonymous (service-to-service — ReviewService) |
 | POST | `/api/listings/upload-image` | Authenticated |
 | POST | `/api/listings` | Authenticated |
 | PUT | `/api/listings/{id}` | Authenticated |
@@ -63,15 +63,11 @@ The solution has 6 active services plus an empty shared library and an unbuilt R
 | PATCH | `/api/listings/{id}/status` | Authenticated |
 | POST | `/api/listings/{id}/feature` | **Host or Admin** |
 
-**Endpoints** — `SearchController` (all Anonymous): `GET /api/search`, `/api/search/featured`, `/api/search/similar/{listingId}`, `/api/search/popular-locations`, `/api/search/stats`.
+`SearchController` (all Anonymous): `GET /api/search`, `/featured`, `/similar/{id}`, `/popular-locations`, `/stats`.
 
-**Functional status:** all working. Photo upload uses a real `IFormFile` endpoint backed by **Azure Blob Storage**, returning the blob URL to store as `ListingImage.ImageUrl`. Search supports location, price range, guests/bedrooms/beds/bathrooms, `type`, **`category`**, amenities, **map bounding-box** (MinLatitude/MaxLatitude/MinLongitude/MaxLongitude), pagination, and sorting. Featured listings use a **real query** on `IsFeatured` + `FeaturedUntil` (replaced the old random sort).
+Photo upload → Azure Blob (`AzureBlobStorage:ConnectionString` required). Search filters: location, price, capacity, `type`, `category`, amenities, **map bounding-box**, pagination, sort. **Rating sort now works** (sorts by the cached `AverageRating` — the old `OrderByDescending(l => 0)` stub is gone). Featured = real query on `IsFeatured`/`FeaturedUntil`. No stubs.
 
-**Stub:** `SearchService` rating-sort is a placeholder (`OrderByDescending(l => 0)`) — no rating system exists.
-
-**Config required:** `AzureBlobStorage:ConnectionString` (required for upload) and `AzureBlobStorage:ContainerName` (optional, defaults to `listing-images`).
-
-**Schema:** `Listings` (HostId, Title, Description, `Type int`, **`Category int`** [ShortTerm/LongTerm/Sale], Guests/Bedrooms/Beds/Bathrooms, PricePerNight, address fields, `Latitude`/`Longitude`, `Status int`, **`IsFeatured bit`**, **`FeaturedUntil`**, CreatedAt/UpdatedAt), `ListingImages` (ImageUrl, Caption, IsPrimary, DisplayOrder), `Amenities` (10 seeded), `ListingAmenities` (join). No `Bookings` table — booking ownership has moved out of this service. Migrations: `AddInitialListingSchema`, `RemoveBookingAndAddListingFeatures`.
+**Schema:** `Listings` (incl. `Category`, `IsFeatured`/`FeaturedUntil`, `Latitude`/`Longitude`, **`AverageRating`/`ReviewCount`** [cached from ReviewService]), `ListingImages`, `Amenities`, `ListingAmenities`. Migrations: `AddInitialListingSchema`, `RemoveBookingAndAddListingFeatures`, `AddListingRatingCache`.
 
 ---
 
@@ -85,72 +81,83 @@ The solution has 6 active services plus an empty shared library and an unbuilt R
 | GET | `/api/bookings/{id}` | Authenticated (ownership-checked) |
 | GET | `/api/bookings/code/{bookingCode}` | Authenticated |
 | GET | `/api/bookings/user/{userId}` | Authenticated |
+| GET | `/api/bookings/{id}/info` | Anonymous (service-to-service — ReviewService) |
 | POST | `/api/bookings/availability` | Anonymous |
 | GET | `/api/bookings/availability-calendar/{listingId}` | Anonymous |
-| POST | `/api/bookings/{id}/cancel` | Authenticated |
+| POST | `/api/bookings/{id}/cancel` | Authenticated (guest/admin) |
+| POST | `/api/bookings/{id}/confirm` | **Host-owner or Admin** |
+| POST | `/api/bookings/{id}/reject` | **Host-owner or Admin** |
+| POST | `/api/bookings/{id}/complete` | **Host-owner or Admin** |
+| POST | `/api/bookings/jobs/auto-complete` | **Admin** (manual/ops trigger; also runs on a timer) |
+| POST | `/api/bookings/jobs/auto-cancel` | **Admin** (manual/ops trigger; also runs on a timer) |
 
-**Functional status:** create (with **guest-capacity validation** fetched from ListingService over HTTP), single-date availability check, **date-range availability calendar**, and cancel all work.
+Create validates guest capacity (HTTP call to ListingService) and availability. Host actions verify listing ownership via `GET /api/listings/{id}/owner`. Each transition is status-guarded and returns a clear 4xx (not 500) when applied from the wrong state.
 
-**Gaps:**
-- **No confirm/reject endpoint.** `ConfirmBookingAsync` exists in the service layer but has no controller route, so a booking has no API path out of `Pending` except cancellation.
-- **No payment processing.** `BookingPayments` table + `BookingPaymentRepository` are a DB scaffold only — there is **zero payment-gateway / JazzCash integration** and no payment endpoint.
+### Booking state machine
 
-**Schema:** `Bookings` (BookingCode, ListingId, UserId, CheckIn/CheckOut, NumberOfGuests, TotalPrice, Currency, `StatusId`, SpecialRequests, CancellationReason, CancelledAt, CreatedAt/UpdatedAt), `BookingStatuses` (5 seeded: Pending/Confirmed/Cancelled/Completed/Refunded), `BookingGuests` (multi-guest), `BookingPayments`. Migrations: `AddInitialBooking`, `RemoveBookingReviews`.
+```
+                  ┌─ /confirm (host) ─→ Confirmed ─┬─ /complete (host) ───────────────→ Completed ─→ (review-eligible)
+   (create)       │                                └─ auto-complete job (checkout passed) ┘
+  ─────────→  Pending ─┬─ /reject (host) ──────────────────→ Rejected
+                       ├─ /cancel (guest/admin) ───────────→ Cancelled
+                       └─ auto-cancel job (unconfirmed >24h) → Cancelled
+```
 
-**⚠️ Schema anomaly:** `Bookings` has both `StatusId` **and** a redundant nullable `BookingStatusId` — a leftover EF shadow foreign key created because the `BookingStatus.Bookings` navigation isn't wired to `StatusId`. Harmless but should be reconciled (explicit relationship config + migration). The `BookingReview` entity is preserved at `WeStay.BookingService/Future/` (excluded from build and DB) for a future reviews feature.
+- `BookingStatuses` has **6** seeded rows: Pending(1), Confirmed(2), Cancelled(3), Completed(4), Refunded(5), Rejected(6).
+- `/confirm` and `/reject` only from **Pending**; `/complete` only from **Confirmed**. `/cancel` is not state-gated.
+- **Completed is the gate for reviews.** It is reached **automatically** by the `BookingCompletionService` background job once `CheckOutDate` passes, or manually via `/complete` (Host/Admin).
+- **Background jobs** (BookingService hosted services, both poll every `Booking:AutoJobIntervalMinutes`, default 60): **auto-complete** (Confirmed past checkout → Completed) and **auto-cancel** (Pending older than `Booking:AutoCancelPendingHours`, default 24h → Cancelled). The `POST /api/bookings/jobs/*` endpoints are **Admin-only** manual/ops triggers (with an optional `asOf` override); the timer path runs in-process with no auth.
+- **Refunded(5)** is seeded but no endpoint sets it (tied to the unbuilt payment/refund flow).
+- Availability is freed by Cancelled(3), Refunded(5), Rejected(6); held by Pending/Confirmed/Completed.
+
+**Schema:** `Bookings`, `BookingStatuses` (6 seeded), `BookingGuests` (multi-guest), `BookingPayments` (scaffold only — no gateway). Migrations: `AddInitialBooking`, `RemoveBookingReviews`, `AddRejectedBookingStatus`. The `BookingReview` entity is preserved (unused) at `WeStay.BookingService/Future/`.
+
+**⚠️ Schema anomaly:** `Bookings` has both `StatusId` and a redundant nullable `BookingStatusId` (EF shadow FK from the `BookingStatus.Bookings` nav not being wired to `StatusId`). Harmless; reconcile with an explicit relationship config + migration.
 
 ---
 
 ## 4. MessagingService (`WeStayMessaging`)
 
-**Endpoints** — all `[Authorize]` except file download:
-- `ConversationsController` (9): `GET /api/conversations`, `GET /{id}`, `GET /guid/{guid}`, `POST`, `POST /{id}/participants`, `DELETE /{id}/participants/{participantId}`, `POST /{id}/read`, `POST /{id}/archive`, `GET /{id}/unread-count`.
-- `MessagesController` (8): `GET /conversation/{id}`, `GET /{id}`, `POST`, `PUT /{id}`, `DELETE /{id}` (soft-delete), `POST /{id}/read`, `POST /conversation/{id}/read-all`, `GET /conversation/{id}/count`.
-- `FileUploadController` (2): `POST /api/fileupload/message/{conversationId}` (auth), `GET /api/fileupload/download/{filename}` (**Anonymous**).
-- **SignalR hub** `/messagehub` — real-time delivery, typing indicators, read receipts.
+All `[Authorize]` except file download. `ConversationsController` (9 endpoints), `MessagesController` (8), `FileUploadController` (2: upload auth, download anon), **SignalR hub** `/messagehub` (real-time, typing indicators, read receipts). Conversations carry optional `ListingId`/`BookingId` (inquiry threads). Messages support file/image attachments.
 
-**Functional status:** conversations, messages, real-time, and file attachments all work (repository-backed). Conversations carry optional `ListingId`/`BookingId`, supporting inquiry threads for long-term/sale listings and booking-related chat.
+**Stubs:** the in-process `NotificationServices` delegates Email/SMS to NotificationService over HTTP, but Push and Broadcast return `false` (not wired); `ConversationService` user-name enrichment was previously mock (not re-verified). File upload writes to local `wwwroot/uploads` (disk, unlike ListingService's Azure Blob).
 
-**Stubs / limitations:** the in-process `NotificationServices` now delegates Email/SMS to NotificationService over HTTP, but **Push and Broadcast return `false`** (not wired). User-name enrichment in `ConversationService` was previously mock data (not re-verified in this pass). File upload writes to local `wwwroot/uploads` (disk), unlike ListingService which uses Azure Blob.
-
-**Schema:** `Conversations` (ConversationGuid, TypeId, **`ListingId`/`BookingId` nullable**, Title, IsArchived), `ConversationTypes` (4 seeded: Direct/Booking/Support/Group), `ConversationParticipants` (IsActive, JoinedAt, LastReadAt), `Messages` (Content, MessageType, **FileUrl/FileName/FileSize**, IsEdited/EditedAt, IsDeleted/DeletedAt), `MessageReads`. Migration: `InitialMessagingSchema`.
+**Schema:** `Conversations`, `ConversationTypes` (4 seeded), `ConversationParticipants`, `Messages`, `MessageReads`. Migration: `InitialMessagingSchema`.
 
 ---
 
 ## 5. NotificationService (`WeStayNotification`)
 
-**Endpoints:**
-- `SMSController` (class `[Authorize]`): `POST /api/sms/send` (auth), `POST /api/sms/send-verification` (**Anonymous**), `POST /api/sms/validate-phone` (auth), `POST /api/sms/format-phone` (auth).
-- `NotificationsController` (internal, **Anonymous**, **not** gateway-routed): `POST /api/notifications/email`, `POST /api/notifications/sms`.
+`SMSController` (send auth, send-verification anon, validate/format-phone auth) + internal `NotificationsController` (`/api/notifications/email`, `/sms` — anon, service-to-service, **not** gateway-routed). Email (SendGrid + SMTP) and SMS (Twilio) work; a background processor polls pending notifications every 60s. **Stub:** Push (FCM) send-code exists but `GetUserFcmTokensAsync` returns empty (no device-token store) → push can't deliver.
 
-**Functional status:** Email (SendGrid + SMTP fallback) and SMS (Twilio) sending are implemented and working. A `NotificationProcessorService` background worker polls pending notifications every 60s.
-
-**Stub:** Push (Firebase/FCM) — the send code exists but `GetUserFcmTokensAsync` **returns an empty list** (no device-token store), so push cannot actually deliver to a user.
-
-**Security note:** the internal `/api/notifications/*` endpoints are `[AllowAnonymous]` (no service-auth mechanism yet) and are deliberately **not** exposed through the gateway. Restrict at the network layer or add a service token before production.
-
-**Schema:** `Notifications` (TypeId, UserId, Subject, Message, IsRead/IsSent, SentAt/ReadAt, Priority, Channel, ExternalId, ErrorMessage, RetryCount), `NotificationTypes` (8 seeded), `NotificationTemplates` (incl. a **`Language` column** — i18n-ready), `UserNotificationPreferences` (per-channel opt-in: email/SMS/push/marketing/booking/security/newsletter). Migration: `InitialNotificationSchema`.
+**Schema:** `Notifications`, `NotificationTypes` (8 seeded), `NotificationTemplates` (with `Language` — i18n-ready), `UserNotificationPreferences` (per-channel opt-in). Migration: `InitialNotificationSchema`.
 
 ---
 
-## 6. ApiGateway (Ocelot, no database)
+## 6. ReviewService (`WeStayReview`) — NEW
 
-Single source of truth: `ocelot.json`. Path-preserving routes; JWT validated **at the gateway** for protected routes using the unified `Bearer` scheme:
+Reviews and star ratings. Only the **guest of a Completed booking** may review, **once per booking** (unique index on `BookingId`).
 
-| Upstream | Downstream port | Auth at gateway |
+**Endpoints** — `ReviewsController`:
+
+| Method | Route | Auth |
 |---|---|---|
-| `/api/auth/users/{everything}` | 7019 | **Admin** (`RouteClaimsRequirement` on `role`) |
-| `/api/auth/{everything}` | 7019 | open (service enforces) |
-| `/api/listings/{everything}` GET | 7002 | open |
-| `/api/listings/{everything}` POST/PUT/DELETE/PATCH | 7002 | Bearer |
-| `/api/search/{everything}` | 7002 | open |
-| `/api/bookings/{everything}` GET | 7292 | open |
-| `/api/bookings/{everything}` POST/PUT/DELETE | 7292 | Bearer |
-| `/api/conversations/{everything}`, `/api/messages/{everything}` | 7179 | Bearer |
-| `/api/fileupload/{everything}` | 7179 | open (service enforces upload) |
-| `/api/sms/{everything}` | 7284 | open (service enforces) |
+| POST | `/api/reviews` | Authenticated (guest of a Completed booking) |
+| GET | `/api/reviews/listing/{listingId}` | Anonymous (paginated) |
+| GET | `/api/reviews/listing/{listingId}/summary` | Anonymous (avg rating + count) |
+| GET | `/api/reviews/user/{userId}` | Authenticated (self or Admin) |
+| PUT | `/api/reviews/{id}` | Authenticated (original reviewer, 30-day edit window) |
+| DELETE | `/api/reviews/{id}` | Authenticated (reviewer or Admin) |
 
-Plus `/health`. The internal `/api/notifications/*` endpoints are intentionally not routed. Functional, no stubs. JWT key/issuer/audience are unified across the gateway and all services.
+Create validates over HTTP (`GET /api/bookings/{id}/info`): booking exists + **Completed** → else 400; caller is the booking's guest → else 403; no existing review → else **409**. `ListingId` is derived from the booking (not trusted from the client). After each create/update/delete, ReviewService recomputes the listing's aggregates and calls `PUT /api/listings/{id}/rating` (best-effort; logged on failure) so search can sort by rating cheaply — the summary endpoint remains the live source of truth.
+
+**Schema:** `Reviews` (ListingId, BookingId [unique], ReviewerId, Rating 1–5, Comment, **HostReply/HostReplyAt nullable** — columns ready, host-reply endpoint is Phase 3.5, CreatedAt/UpdatedAt). Migration: `InitialReviewSchema`.
+
+---
+
+## 7. ApiGateway (Ocelot, no database)
+
+`ocelot.json` is the single source of truth; JWT validated at the gateway on protected routes (unified `Bearer` scheme). Routes: `/api/auth/users/*` (**Admin** via `RouteClaimsRequirement`), `/api/auth/*` (open), `/api/listings/*` (GET open / writes Bearer), `/api/search/*` (open), `/api/bookings/*` (GET open / writes Bearer), `/api/conversations/*` + `/api/messages/*` (Bearer), `/api/fileupload/*` (open), `/api/sms/*` (open), `/api/reviews/*` (GET open / writes Bearer), `/health`. Internal `/api/notifications/*` is intentionally not routed.
 
 ---
 
@@ -158,49 +165,33 @@ Plus `/health`. The internal `/api/notifications/*` endpoints are intentionally 
 
 | # | Phase 1 item | Status | Notes |
 |---|---|---|---|
-| 1 | Owner onboarding + listing (short-term/long-term/sale) | **Done** | `become-host` onboarding + listing CRUD; `ListingCategory` (ShortTerm/LongTerm/Sale) live as the `Category` column. |
-| 2 | Photo uploads | **Done** | Real `IFormFile` → Azure Blob → URL stored as `ListingImage.ImageUrl`. |
-| 3 | Search with filters | **Done** | Location, price, capacity, type, category, amenities, pagination, sort. (Rating sort is a stub.) |
-| 4 | Map view support | **Done** | Lat/Long stored + returned; bounding-box filter in search. |
-| 5 | Short-term booking + availability calendar | **Done\*** | Create (+capacity validation) and date-range calendar work. *Caveat: no confirm/reject endpoint — a booking can only be created or cancelled via the API.* |
-| 6 | JazzCash payment | **Not Started** | No gateway code at all; only a `BookingPayments` DB scaffold. |
-| 7 | Inquiry/messaging (long-term & sale) | **Done\*** | Full conversations/messages/real-time/attachments, linked to listings/bookings. *Caveats: new-message notifications not wired; user-name enrichment was mock.* |
-| 8 | Email + SMS notifications | **Partial** | Sending capability works (SendGrid/SMTP + Twilio) and is callable, but **nothing triggers it on app events** (no event/bus wiring). Push is stubbed (no device-token store). |
-| 9 | Featured/boosted listings | **Done** | `IsFeatured`/`FeaturedUntil` columns, real featured query, Host/Admin toggle. (No paid-boost flow yet — as scoped.) |
-| 10 | Admin capabilities | **Partial** | Role system (Guest/Host/Admin) + Admin-gated `set-role` endpoint + gateway enforcement exist, but there are **no admin operations endpoints** (no user/listing moderation, no verification-approval endpoint, no "all bookings" view). |
+| 1 | Owner onboarding + listing (short-term/long-term/sale) | **Done** | `become-host` + listing CRUD; `Category` = ShortTerm/LongTerm/Sale. |
+| 2 | Photo uploads | **Done** | Real `IFormFile` → Azure Blob. |
+| 3 | Search with filters | **Done** | Location, price, capacity, type, category, amenities, pagination, sort (incl. working rating sort). |
+| 4 | Map view support | **Done** | Lat/Long returned; bounding-box filter. |
+| 5 | Short-term booking + availability calendar | **Done** | Create (+capacity validation), date-range calendar, and the **full lifecycle** (confirm/reject/cancel/complete) all exist. |
+| 6 | JazzCash payment | **Not Started** | No gateway code; only a `BookingPayments` DB scaffold. |
+| 7 | Inquiry/messaging (long-term & sale) | **Done\*** | Conversations/messages/real-time/attachments, linked to listings/bookings. *Caveat: new-message notifications not wired.* |
+| 8 | Email + SMS notifications | **Partial** | Sending works (SendGrid/SMTP + Twilio) but isn't triggered by app events (no event/bus wiring). Push stubbed. |
+| 9 | Featured/boosted listings | **Done** | `IsFeatured`/`FeaturedUntil`, real featured query, Host/Admin toggle. (No paid-boost flow — as scoped.) |
+| 10 | Admin capabilities | **Partial** | Role system + Admin-gated `set-role` + gateway enforcement, but no admin *operations* endpoints (moderation, verification approval, all-bookings view). |
 
-**Only #6 (JazzCash) remains Not Started.** #8 and #10 are Partial; everything else is Done (5 and 7 with minor caveats).
-
----
-
-## Existing functionality beyond the Phase 1 list
-
-These are built and present in code/schema but were outside the original Phase 1 discussion:
-
-1. **ID verification (KYC)** — `Verifications` table + full `VerificationService` (submit/update/approve/reject by status) + `verification-update` endpoint. (Admin approval exists as a service method but has no admin endpoint wired to it.)
-2. **OTP verification** — phone (Twilio) and email (SendGrid) one-time-code flows.
-3. **SignalR real-time chat** — live delivery, typing indicators, read receipts, and file/image attachments in messages.
-4. **Notification preferences + templating** — granular per-channel `UserNotificationPreferences` and `NotificationTemplates` with a `Language` column (i18n groundwork).
-5. **Multi-guest bookings** — `BookingGuests` captures multiple named guests per booking.
-6. **Discovery endpoints** — `/api/search/similar/{id}`, `/popular-locations`, `/stats`.
-7. **SMS utilities** — `validate-phone` / `format-phone`.
-8. **Reviews groundwork** — `BookingReview` entity preserved at `WeStay.BookingService/Future/` for a later phase.
+**Beyond Phase 1 (built):** Reviews & star ratings (Phase 3, this service), ID verification (KYC), OTP (phone/email), SignalR chat + attachments, notification preferences + i18n templating, multi-guest bookings, discovery endpoints (`similar`/`popular-locations`/`stats`), booking confirm/reject/complete lifecycle.
 
 ---
 
 ## Quality / testing
 
-- **Integration tests:** `WeStay.Tests` (xUnit, HTTP-level through the gateway) — **22/22 passing**. Covers the auth chain, role system, listing CRUD + category, price/capacity cross-service calls, booking flow + capacity validation, and featured listings.
-- **Migrations:** all five data services use EF Core migrations on their own databases; `EnsureCreated()` removed everywhere.
-- **Secrets:** no secrets committed; all read from User Secrets / environment variables. `appsettings.json` files are placeholder-only templates; `appsettings.Development.json`/`Production.json` are git-ignored.
+- **Integration tests:** `WeStay.Tests` (xUnit, HTTP-level via the gateway) — **36/36 passing**. Covers auth chain, roles, listing CRUD + category + map fields, price/capacity cross-service calls, booking flow + capacity, booking confirm/reject (+ ownership/status guards), the auto-complete / auto-cancel jobs (incl. Admin-only enforcement → 403 for non-admins), and reviews (eligibility, ownership, double-review, summary average). The suite runs **serially** (`DisableTestParallelization`) because the job tests trigger global batch sweeps.
+- **Migrations:** all six data services on their own databases; `EnsureCreated()` removed.
+- **Secrets:** none committed; read from User Secrets / environment variables. `appsettings.json` are placeholder-only; `appsettings.Development.json`/`Production.json` git-ignored.
 
 ---
 
 ## Recommended next priorities
 
-1. **JazzCash payment integration (#6)** — the only Not-Started Phase 1 item; unblocks the end-to-end paid booking flow. Build it as a payment module/service that fills the existing `BookingPayments` scaffold (initiate + webhook).
-2. **Wire notifications to events (#8)** — connect booking/auth events to NotificationService (direct HTTP now, message bus later) so Email/SMS actually fire on real events.
-3. **Booking lifecycle** — expose confirm/reject endpoints so hosts can approve bookings (the service logic already exists).
-4. **Admin operations (#10)** — add admin endpoints (user/listing moderation, verification approval, bookings overview) on top of the existing role system.
-5. **Schema cleanup** — remove the redundant `Bookings.BookingStatusId` shadow FK via an explicit relationship config + migration.
-6. **Push notifications** — implement the FCM device-token store so push can actually deliver.
+1. **JazzCash payment (#6)** — the only Not-Started Phase 1 item; fills the `BookingPayments` scaffold (initiate + webhook) and enables Refunded.
+2. **Wire notifications to events (#8)** — connect booking/auth events to NotificationService (direct HTTP now, bus later).
+3. **Admin operations (#10)** — moderation, verification approval, bookings overview on top of the role system.
+4. **Service-to-service auth** — the internal `[AllowAnonymous]` endpoints (`/price`, `/capacity`, `/owner`, `/info`, `/rating`, `/notifications/*`) need a service token or network restriction before production (today reachable by any authenticated user through the gateway's write routes). *(The `/jobs/*` triggers are already Admin-only.)*
+5. **Schema cleanup** — remove the redundant `Bookings.BookingStatusId` shadow FK; implement the FCM device-token store for push.

@@ -337,6 +337,116 @@ namespace WeStay.BookingService.Controllers
             }
         }
 
+        /// <summary>
+        /// Mark a Confirmed booking as Completed. Host-owner (or Admin) only. Until an automatic
+        /// post-checkout completion job exists, this is the transition that makes a booking
+        /// Completed — which the reviews feature depends on.
+        /// </summary>
+        [HttpPost("{id}/complete")]
+        public async Task<IActionResult> CompleteBooking(int id)
+        {
+            try
+            {
+                var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
+                var isAdmin = User.IsInRole("Admin");
+
+                var booking = await _bookingService.CompleteBookingAsync(id, userId, isAdmin);
+
+                return Ok(new { Message = "Booking marked as completed", Booking = MapToBookingResponse(booking) });
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { Message = ex.Message });
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                return StatusCode(403, new { Message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { Message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error completing booking {BookingId}", id);
+                return StatusCode(500, new { Message = "An error occurred while completing booking" });
+            }
+        }
+
+        /// <summary>
+        /// Service-to-service: minimal booking facts (guest, listing, status) used by ReviewService
+        /// to validate review eligibility. Anonymous — called over HTTP without a user token.
+        /// </summary>
+        [HttpGet("{id}/info")]
+        [AllowAnonymous]
+        public async Task<IActionResult> GetBookingInfo(int id)
+        {
+            try
+            {
+                var booking = await _bookingService.GetBookingByIdAsync(id);
+                if (booking == null)
+                {
+                    return NotFound(new { Message = "Booking not found" });
+                }
+
+                return Ok(new
+                {
+                    BookingId = booking.Id,
+                    ListingId = booking.ListingId,
+                    UserId = booking.UserId,
+                    Status = booking.Status?.Name
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting booking info {BookingId}", id);
+                return StatusCode(500, new { Message = "An error occurred while retrieving booking info" });
+            }
+        }
+
+        /// <summary>
+        /// Manually trigger the auto-complete batch (also runs automatically on a timer via
+        /// BookingCompletionService). Optional <paramref name="asOf"/> overrides "now" (for ops
+        /// backfill / testing); defaults to UtcNow. Requires authentication; restrict to Admin/internal
+        /// in production (it is a global mutation).
+        /// </summary>
+        [HttpPost("jobs/auto-complete")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> RunAutoComplete([FromQuery] DateTime? asOf)
+        {
+            try
+            {
+                var count = await _bookingService.AutoCompleteExpiredBookingsAsync(asOf ?? DateTime.UtcNow);
+                return Ok(new { Message = "Auto-complete batch executed", Completed = count });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error running auto-complete batch");
+                return StatusCode(500, new { Message = "An error occurred while running the auto-complete batch" });
+            }
+        }
+
+        /// <summary>
+        /// Manually trigger the auto-cancel batch (also runs automatically on a timer via
+        /// BookingExpiryService). Optional <paramref name="asOf"/> overrides "now"; defaults to UtcNow.
+        /// Requires authentication; restrict to Admin/internal in production.
+        /// </summary>
+        [HttpPost("jobs/auto-cancel")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> RunAutoCancel([FromQuery] DateTime? asOf)
+        {
+            try
+            {
+                var count = await _bookingService.AutoCancelUnconfirmedBookingsAsync(asOf ?? DateTime.UtcNow);
+                return Ok(new { Message = "Auto-cancel batch executed", Cancelled = count });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error running auto-cancel batch");
+                return StatusCode(500, new { Message = "An error occurred while running the auto-cancel batch" });
+            }
+        }
+
         private BookingResponse MapToBookingResponse(Booking booking)
         {
             return new BookingResponse

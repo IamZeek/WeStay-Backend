@@ -29,6 +29,21 @@ namespace WeStay.ListingService.Services
                 .FirstOrDefaultAsync(l => l.Id == id && l.Status == ListingStatus.Active);
         }
 
+        public async Task<bool> UpdateRatingAsync(int listingId, double averageRating, int reviewCount)
+        {
+            var listing = await _context.Listings.FirstOrDefaultAsync(l => l.Id == listingId);
+            if (listing == null)
+            {
+                return false;
+            }
+
+            // Derived cache from ReviewService — not a content edit, so UpdatedAt is left untouched.
+            listing.AverageRating = averageRating;
+            listing.ReviewCount = reviewCount;
+            await _context.SaveChangesAsync();
+            return true;
+        }
+
         public async Task<int?> GetHostIdAsync(int listingId)
         {
             // Ownership lookup for service-to-service checks (e.g. BookingService confirm/reject).

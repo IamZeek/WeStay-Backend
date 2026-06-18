@@ -98,6 +98,12 @@ namespace WeStay.ListingService.Models
         public bool IsFeatured { get; set; } = false;
         public DateTime? FeaturedUntil { get; set; }
 
+        // Cached review aggregates. Source of truth is WeStay.ReviewService; these are refreshed via
+        // a callback after each review mutation so search can sort by rating without per-result
+        // cross-service calls.
+        public double AverageRating { get; set; } = 0;
+        public int ReviewCount { get; set; } = 0;
+
         // Navigation properties
         public virtual ICollection<Amenity> Amenities { get; set; }
         public virtual ICollection<ListingImage> Images { get; set; }

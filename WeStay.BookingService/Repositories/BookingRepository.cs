@@ -123,6 +123,22 @@ namespace WeStay.BookingService.Repositories
             return !conflictingBookings.Any();
         }
 
+        public async Task<List<int>> GetBookingIdsByStatusPastCheckoutAsync(int statusId, DateTime asOfUtc)
+        {
+            return await _context.Bookings
+                .Where(b => b.StatusId == statusId && b.CheckOutDate < asOfUtc)
+                .Select(b => b.Id)
+                .ToListAsync();
+        }
+
+        public async Task<List<int>> GetBookingIdsByStatusCreatedBeforeAsync(int statusId, DateTime cutoffUtc)
+        {
+            return await _context.Bookings
+                .Where(b => b.StatusId == statusId && b.CreatedAt < cutoffUtc)
+                .Select(b => b.Id)
+                .ToListAsync();
+        }
+
         private string GenerateBookingCode()
         {
             const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";

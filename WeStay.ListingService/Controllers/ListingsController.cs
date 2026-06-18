@@ -147,6 +147,32 @@ namespace WeStay.ListingService.Controllers
         }
 
         /// <summary>
+        /// Refresh a listing's cached review aggregates (AverageRating, ReviewCount). Called
+        /// service-to-service by WeStay.ReviewService after each review mutation
+        /// (PUT /api/listings/{id}/rating).
+        /// </summary>
+        [HttpPut("{id}/rating")]
+        [AllowAnonymous] // Called service-to-service by ReviewService without a user token
+        public async Task<IActionResult> UpdateRating(int id, [FromBody] UpdateRatingRequest request)
+        {
+            try
+            {
+                var updated = await _listingService.UpdateRatingAsync(id, request.AverageRating, request.ReviewCount);
+                if (!updated)
+                {
+                    return NotFound(new { Message = "Listing not found" });
+                }
+
+                return Ok(new { Message = "Rating cache updated" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating rating cache for listing {ListingId}", id);
+                return StatusCode(500, new { Message = "An error occurred while updating the rating cache" });
+            }
+        }
+
+        /// <summary>
         /// Upload a listing image to blob storage and return its public URL.
         /// The returned URL is then passed in CreateListing/UpdateListing's ImageUrls
         /// (stored as ListingImage.ImageUrl). Multipart/form-data field name: "file".
@@ -347,5 +373,11 @@ namespace WeStay.ListingService.Controllers
     {
         public bool IsFeatured { get; set; }
         public DateTime? FeaturedUntil { get; set; }
+    }
+
+    public class UpdateRatingRequest
+    {
+        public double AverageRating { get; set; }
+        public int ReviewCount { get; set; }
     }
 }

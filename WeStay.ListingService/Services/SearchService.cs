@@ -111,7 +111,7 @@ namespace WeStay.ListingService.Services
             query = request.SortBy.ToLower() switch
             {
                 "price" => request.SortDescending ? query.OrderByDescending(l => l.PricePerNight) : query.OrderBy(l => l.PricePerNight),
-                "rating" => query.OrderByDescending(l => 0), // Placeholder for when ratings are implemented
+                "rating" => request.SortDescending ? query.OrderByDescending(l => l.AverageRating) : query.OrderBy(l => l.AverageRating),
                 "createdat" => request.SortDescending ? query.OrderByDescending(l => l.CreatedAt) : query.OrderBy(l => l.CreatedAt),
                 _ => request.SortDescending ? query.OrderByDescending(l => l.CreatedAt) : query.OrderBy(l => l.CreatedAt)
             };

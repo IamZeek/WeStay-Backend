@@ -22,6 +22,10 @@ namespace WeStay.Tests.Infrastructure
             return auth.Token;
         }
 
+        // Logs in as the admin user that AuthService seeds in Development.
+        public static Task<string> LoginAdminAsync(ApiClient api)
+            => LoginAsync(api, TestData.AdminEmail, TestData.AdminPassword);
+
         public static async Task<string> BecomeHostAsync(ApiClient api, string token)
         {
             var response = await api.PostAsync("/api/auth/become-host", null, token);
@@ -40,9 +44,9 @@ namespace WeStay.Tests.Infrastructure
             return await Json.ReadAsync<ListingDto>(response);
         }
 
-        public static async Task<int> CreateBookingAsync(ApiClient api, string token, int listingId, int numberOfGuests = 2)
+        public static async Task<int> CreateBookingAsync(ApiClient api, string token, int listingId, int numberOfGuests = 2, int checkInOffsetDays = 7)
         {
-            var response = await api.PostAsync("/api/bookings", TestData.BookingBody(listingId, numberOfGuests), token);
+            var response = await api.PostAsync("/api/bookings", TestData.BookingBody(listingId, numberOfGuests, checkInOffsetDays), token);
             response.EnsureSuccessStatusCode();
             var envelope = await Json.ReadAsync<BookingCreatedEnvelope>(response);
             return envelope.Booking.Id;

@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using WeStay.AuthService.Data;
+using WeStay.AuthService.Models;
 using WeStay.AuthService.Services;
 using WeStay.AuthService.Services.Interfaces;
 using WeStay.AuthService.Utilities;
@@ -110,5 +111,49 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+
+// Seed a configurable admin user (idempotent). In Development a default password is used so the
+// app + integration tests have an admin out of the box; in other environments the admin is only
+// seeded when AdminSeed:Password is explicitly configured — never seed a default-password admin
+// in production. Override AdminSeed:Email / AdminSeed:Password via User Secrets or env vars.
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
+    var adminEmail = app.Configuration["AdminSeed:Email"] ?? "admin@westay.local";
+    var adminPassword = app.Configuration["AdminSeed:Password"];
+    if (string.IsNullOrEmpty(adminPassword) && app.Environment.IsDevelopment())
+    {
+        adminPassword = "Admin123!"; // dev-only default
+    }
+
+    if (!string.IsNullOrEmpty(adminPassword))
+    {
+        var admin = await db.Users.FirstOrDefaultAsync(u => u.Email == adminEmail);
+        if (admin == null)
+        {
+            db.Users.Add(new User
+            {
+                Email = adminEmail,
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword(adminPassword),
+                FirstName = "System",
+                LastName = "Admin",
+                PhoneNumber = "+10000000000",
+                Role = UserRole.Admin,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            });
+            await db.SaveChangesAsync();
+            app.Logger.LogInformation("Seeded admin user {Email}", adminEmail);
+        }
+        else if (admin.Role != UserRole.Admin)
+        {
+            admin.Role = UserRole.Admin;
+            admin.UpdatedAt = DateTime.UtcNow;
+            await db.SaveChangesAsync();
+            app.Logger.LogInformation("Promoted existing user {Email} to Admin", adminEmail);
+        }
+    }
+}
 
 app.Run();

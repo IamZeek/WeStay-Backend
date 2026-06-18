@@ -12,6 +12,9 @@ namespace WeStay.BookingService.Services.Interfaces
         Task<Booking> CancelBookingAsync(int bookingId, string reason);
         Task<Booking> ConfirmBookingAsync(int bookingId, int requestingUserId, bool isAdmin);
         Task<Booking> RejectBookingAsync(int bookingId, int requestingUserId, bool isAdmin, string reason);
+        Task<Booking> CompleteBookingAsync(int bookingId, int requestingUserId, bool isAdmin);
+        Task<int> AutoCompleteExpiredBookingsAsync(DateTime asOfUtc);
+        Task<int> AutoCancelUnconfirmedBookingsAsync(DateTime asOfUtc);
         Task<bool> IsListingAvailableAsync(int listingId, DateTime checkInDate, DateTime checkOutDate, int? excludeBookingId = null);
         Task<decimal> CalculateBookingPriceAsync(int listingId, DateTime checkInDate, DateTime checkOutDate, int numberOfGuests);
     }

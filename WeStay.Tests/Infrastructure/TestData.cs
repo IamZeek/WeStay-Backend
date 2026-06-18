@@ -8,6 +8,10 @@ namespace WeStay.Tests.Infrastructure
     {
         public const string Password = "Passw0rd!";
 
+        // The admin user seeded by AuthService in Development (AdminSeed defaults).
+        public const string AdminEmail = "admin@westay.local";
+        public const string AdminPassword = "Admin123!";
+
         public static string RandomEmail() => $"test_{Guid.NewGuid():N}@westay-test.com";
 
         public static string UniqueCity() => $"City_{Guid.NewGuid():N}";
@@ -41,11 +45,11 @@ namespace WeStay.Tests.Infrastructure
             ImageUrls = new[] { "https://example.com/image.jpg" }
         };
 
-        public static object BookingBody(int listingId, int numberOfGuests) => new
+        public static object BookingBody(int listingId, int numberOfGuests, int checkInOffsetDays = 7) => new
         {
             ListingId = listingId,
-            CheckInDate = DateTime.UtcNow.Date.AddDays(7),
-            CheckOutDate = DateTime.UtcNow.Date.AddDays(10),
+            CheckInDate = DateTime.UtcNow.Date.AddDays(checkInOffsetDays),
+            CheckOutDate = DateTime.UtcNow.Date.AddDays(checkInOffsetDays + 3),
             NumberOfGuests = numberOfGuests,
             SpecialRequests = "none",
             Guests = new[]

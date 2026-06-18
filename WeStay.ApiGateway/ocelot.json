@@ -118,6 +118,25 @@
       "DownstreamHostAndPorts": [ { "Host": "localhost", "Port": 7284 } ],
       "UpstreamPathTemplate": "/api/sms/{everything}",
       "UpstreamHttpMethod": [ "GET", "POST", "OPTIONS" ]
+    },
+
+    // ---- ReviewService (7084) ----
+    // Public reads: listing reviews + summary (user-reviews reads are authorized by the service).
+    {
+      "DownstreamPathTemplate": "/api/reviews/{everything}",
+      "DownstreamScheme": "https",
+      "DownstreamHostAndPorts": [ { "Host": "localhost", "Port": 7084 } ],
+      "UpstreamPathTemplate": "/api/reviews/{everything}",
+      "UpstreamHttpMethod": [ "GET", "OPTIONS" ]
+    },
+    // Writes (create/edit/delete a review) require a valid token — validated at the gateway.
+    {
+      "DownstreamPathTemplate": "/api/reviews/{everything}",
+      "DownstreamScheme": "https",
+      "DownstreamHostAndPorts": [ { "Host": "localhost", "Port": 7084 } ],
+      "UpstreamPathTemplate": "/api/reviews/{everything}",
+      "UpstreamHttpMethod": [ "POST", "PUT", "DELETE" ],
+      "AuthenticationOptions": { "AuthenticationProviderKey": "Bearer", "AllowedScopes": [] }
     }
   ],
 

@@ -37,4 +37,11 @@ namespace WeStay.Tests.Infrastructure
     // Confirm/reject response: { message, booking: { id, status, ... } }
     public record BookingActionResponse(string Message, BookingActionBooking Booking);
     public record BookingActionBooking(int Id, string Status);
+
+    // Review responses
+    public record ReviewDto(int Id, int ListingId, int BookingId, int ReviewerId, int Rating, string? Comment);
+    public record ReviewSummaryDto(int ListingId, double AverageRating, int ReviewCount);
+
+    // Subset of BookingService's GET /api/bookings/{id}/info
+    public record BookingStatusInfo(int BookingId, string Status);
 }
