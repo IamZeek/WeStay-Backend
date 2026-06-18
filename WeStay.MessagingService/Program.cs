@@ -165,11 +165,6 @@ app.UseStaticFiles(new StaticFileOptions
 });
 app.MapControllers();
 
-// Initialize database
-using (var scope = app.Services.CreateScope())
-{
-    var context = scope.ServiceProvider.GetRequiredService<MessagingDbContext>();
-    context.Database.EnsureCreated();
-}
-
+// Schema is managed by EF Core migrations (apply with `dotnet ef database update`),
+// matching AuthService/ListingService. EnsureCreated() was removed.
 app.Run();
