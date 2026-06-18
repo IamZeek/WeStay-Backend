@@ -99,7 +99,12 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
-builder.Services.AddControllers();
+// IgnoreCycles: Listing includes Amenities, and Amenity has an inverse Listings navigation,
+// so EF relationship fixup creates a Listing<->Amenity object cycle. Without this the default
+// serializer throws (HTTP 500) when returning listings.
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+        options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles);
 
 var app = builder.Build();
 

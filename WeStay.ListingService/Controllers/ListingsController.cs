@@ -289,10 +289,15 @@ namespace WeStay.ListingService.Controllers
 
                 if (!result)
                 {
-                    return NotFound(new { Message = "Listing not found or you don't have permission to feature it" });
+                    return NotFound(new { Message = "Listing not found" });
                 }
 
                 return Ok(new { Message = request.IsFeatured ? "Listing featured" : "Listing unfeatured" });
+            }
+            catch (UnauthorizedAccessException)
+            {
+                // Listing exists but the requesting Host is not its owner.
+                return StatusCode(403, new { Message = "You can only feature your own listings." });
             }
             catch (Exception ex)
             {

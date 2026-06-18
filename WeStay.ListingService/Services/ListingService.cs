@@ -176,17 +176,17 @@ namespace WeStay.ListingService.Services
 
         public async Task<bool> SetFeaturedStatusAsync(int listingId, int requestingUserId, bool isAdmin, bool isFeatured, DateTime? featuredUntil)
         {
-            // Hosts may only feature their own listings; Admins may feature any listing.
-            var query = _context.Listings.Where(l => l.Id == listingId);
-            if (!isAdmin)
-            {
-                query = query.Where(l => l.HostId == requestingUserId);
-            }
-
-            var listing = await query.FirstOrDefaultAsync();
+            var listing = await _context.Listings.FirstOrDefaultAsync(l => l.Id == listingId);
             if (listing == null)
             {
-                return false;
+                return false; // -> 404 Not Found
+            }
+
+            // Hosts may only feature their own listings; Admins may feature any listing.
+            // Distinguish "exists but not yours" (403) from "doesn't exist" (404).
+            if (!isAdmin && listing.HostId != requestingUserId)
+            {
+                throw new UnauthorizedAccessException("You can only feature your own listings.");
             }
 
             listing.IsFeatured = isFeatured;
