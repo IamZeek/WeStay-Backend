@@ -1,4 +1,5 @@
-﻿using WeStay.BookingService.Repositories.Interfaces;
+﻿using WeStay.BookingService.DTOs;
+using WeStay.BookingService.Repositories.Interfaces;
 using WeStay.BookingService.Services.Interfaces;
 
 namespace WeStay.BookingService.Services
@@ -46,6 +47,30 @@ namespace WeStay.BookingService.Services
             }
 
             return unavailableDates.Distinct().OrderBy(d => d);
+        }
+
+        public async Task<IEnumerable<DateAvailability>> GetAvailabilityCalendarAsync(int listingId, DateTime startDate, DateTime endDate)
+        {
+            if (startDate.Date > endDate.Date)
+            {
+                throw new ArgumentException("startDate must be on or before endDate");
+            }
+
+            var unavailable = (await GetUnavailableDatesAsync(listingId, startDate, endDate))
+                .Select(d => d.Date)
+                .ToHashSet();
+
+            var calendar = new List<DateAvailability>();
+            for (var date = startDate.Date; date <= endDate.Date; date = date.AddDays(1))
+            {
+                calendar.Add(new DateAvailability
+                {
+                    Date = date,
+                    IsAvailable = !unavailable.Contains(date)
+                });
+            }
+
+            return calendar;
         }
     }
 }

@@ -14,6 +14,15 @@ namespace WeStay.ListingService.Models.Requests
         public decimal? MinPrice { get; set; }
         public decimal? MaxPrice { get; set; }
         public ListingType? Type { get; set; }
+        public ListingCategory? Category { get; set; }
+
+        // Optional map bounding-box filter. Provide all four to restrict results to listings
+        // whose coordinates fall inside the box (listings without coordinates are excluded).
+        public double? MinLatitude { get; set; }
+        public double? MaxLatitude { get; set; }
+        public double? MinLongitude { get; set; }
+        public double? MaxLongitude { get; set; }
+
         public List<int> AmenityIds { get; set; } = new List<int>();
         public int Page { get; set; } = 1;
         public int PageSize { get; set; } = 20;

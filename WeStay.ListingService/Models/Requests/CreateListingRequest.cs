@@ -17,6 +17,9 @@ namespace WeStay.ListingService.Models.Requests
         public ListingType Type { get; set; }
 
         [Required]
+        public ListingCategory Category { get; set; }
+
+        [Required]
         [Range(1, 50)]
         public int Guests { get; set; }
 

@@ -75,6 +75,23 @@ namespace WeStay.ListingService.Services
                 query = query.Where(l => l.Type == request.Type.Value);
             }
 
+            // Filter by listing category (short-term / long-term / sale).
+            if (request.Category.HasValue)
+            {
+                query = query.Where(l => l.Category == request.Category.Value);
+            }
+
+            // Map bounding-box filter (for map-view searches). Requires all four bounds.
+            // Listings without coordinates are excluded from a geographic search.
+            if (request.MinLatitude.HasValue && request.MaxLatitude.HasValue &&
+                request.MinLongitude.HasValue && request.MaxLongitude.HasValue)
+            {
+                query = query.Where(l =>
+                    l.Latitude != null && l.Longitude != null &&
+                    l.Latitude >= request.MinLatitude.Value && l.Latitude <= request.MaxLatitude.Value &&
+                    l.Longitude >= request.MinLongitude.Value && l.Longitude <= request.MaxLongitude.Value);
+            }
+
             if (request.AmenityIds != null && request.AmenityIds.Any())
             {
                 query = query.Where(l => l.Amenities.Any(a => request.AmenityIds.Contains(a.Id)));
@@ -113,12 +130,17 @@ namespace WeStay.ListingService.Services
 
         public async Task<IEnumerable<Listing>> GetFeaturedListingsAsync()
         {
-            // Get random active listings with images
+            // Real featured query: active listings explicitly marked IsFeatured whose featured
+            // window hasn't expired. (Replaces the previous random OrderBy(Guid.NewGuid()) sort.)
+            var now = DateTime.UtcNow;
             var featuredListings = await _context.Listings
                 .Include(l => l.Amenities)
                 .Include(l => l.Images)
-                .Where(l => l.Status == ListingStatus.Active && l.Images.Any())
-                .OrderBy(l => Guid.NewGuid()) // Random order
+                .Where(l => l.Status == ListingStatus.Active
+                            && l.IsFeatured
+                            && (l.FeaturedUntil == null || l.FeaturedUntil > now))
+                .OrderByDescending(l => l.FeaturedUntil)
+                .ThenByDescending(l => l.CreatedAt)
                 .Take(8)
                 .ToListAsync();
 

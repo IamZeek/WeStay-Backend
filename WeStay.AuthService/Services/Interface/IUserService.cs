@@ -11,5 +11,6 @@ namespace WeStay.AuthService.Services.Interfaces
         Task<bool> CheckPasswordAsync(User user, string password);
         Task<bool> UserExistsAsync(string email);
         Task<bool> UpdateUserStatusAsync(int id,string type);
+        Task<User> UpdateUserRoleAsync(int id, UserRole role);
     }
 }

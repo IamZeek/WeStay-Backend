@@ -47,6 +47,7 @@ namespace WeStay.ListingService.Services
                 Title = request.Title,
                 Description = request.Description,
                 Type = request.Type,
+                Category = request.Category,
                 Guests = request.Guests,
                 Bedrooms = request.Bedrooms,
                 Beds = request.Beds,
@@ -106,6 +107,7 @@ namespace WeStay.ListingService.Services
             // Update properties if provided
             if (!string.IsNullOrEmpty(request.Title)) listing.Title = request.Title;
             if (!string.IsNullOrEmpty(request.Description)) listing.Description = request.Description;
+            if (request.Category.HasValue) listing.Category = request.Category.Value;
             if (request.Guests.HasValue) listing.Guests = request.Guests.Value;
             if (request.Bedrooms.HasValue) listing.Bedrooms = request.Bedrooms.Value;
             if (request.Beds.HasValue) listing.Beds = request.Beds.Value;
@@ -168,6 +170,33 @@ namespace WeStay.ListingService.Services
             await _context.SaveChangesAsync();
 
             _logger.LogInformation("Deleted listing {ListingId} for host {HostId}", listingId, hostId);
+
+            return true;
+        }
+
+        public async Task<bool> SetFeaturedStatusAsync(int listingId, int requestingUserId, bool isAdmin, bool isFeatured, DateTime? featuredUntil)
+        {
+            // Hosts may only feature their own listings; Admins may feature any listing.
+            var query = _context.Listings.Where(l => l.Id == listingId);
+            if (!isAdmin)
+            {
+                query = query.Where(l => l.HostId == requestingUserId);
+            }
+
+            var listing = await query.FirstOrDefaultAsync();
+            if (listing == null)
+            {
+                return false;
+            }
+
+            listing.IsFeatured = isFeatured;
+            listing.FeaturedUntil = isFeatured ? featuredUntil : null;
+            listing.UpdatedAt = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+
+            _logger.LogInformation("Set IsFeatured={IsFeatured} (until {FeaturedUntil}) on listing {ListingId} by user {UserId} (admin={IsAdmin})",
+                isFeatured, featuredUntil, listingId, requestingUserId, isAdmin);
 
             return true;
         }

@@ -30,6 +30,9 @@ builder.Services.AddAuthentication(options =>
 })
 .AddJwtBearer("Bearer", options =>
 {
+    // Keep JWT claim names as-is (don't remap "role" to the long ClaimTypes.Role URI) so both
+    // the role policies below and Ocelot's per-route RouteClaimsRequirement can match on "role".
+    options.MapInboundClaims = false;
     options.TokenValidationParameters = new TokenValidationParameters
     {
         ValidateIssuer = true,
@@ -39,7 +42,12 @@ builder.Services.AddAuthentication(options =>
         ValidIssuer = jwtSettings["Issuer"],
         ValidAudience = jwtSettings["Audience"],
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey)),
-        ClockSkew = TimeSpan.Zero
+        ClockSkew = TimeSpan.Zero,
+        // The token carries the role under the short "role" claim (AuthService issues
+        // ClaimTypes.Role, which serializes to "role"). Point the role/name claim types at the
+        // short names so RequireRole(...) in the AdminOnly/HostOnly policies works.
+        RoleClaimType = "role",
+        NameClaimType = "nameid"
     };
 
     options.Events = new JwtBearerEvents
@@ -63,6 +71,11 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("RequireAuthenticatedUser", policy =>
         policy.RequireAuthenticatedUser());
 
+    // These policies now resolve correctly because the role claim ("role") is issued by
+    // AuthService and RoleClaimType is set above. They apply to any controller hosted in the
+    // gateway; Ocelot-PROXIED routes enforce roles via "RouteClaimsRequirement" in ocelot.json
+    // (single-role checks, e.g. Admin). Host-or-Admin endpoints are enforced at the owning
+    // service via [Authorize(Roles="Host,Admin")] since RouteClaimsRequirement can't express OR.
     options.AddPolicy("AdminOnly", policy =>
         policy.RequireRole("Admin"));
 
@@ -97,7 +110,10 @@ builder.Services.AddCors(options =>
 builder.Services.AddHealthChecks();
 
 // Add custom middleware
-builder.Services.AddTransient<AuthenticationMiddleware>();
+// NOTE: AuthenticationMiddleware was removed. It never enforced anything because Ocelot-routed
+// requests carry no MVC endpoint metadata, so GetEndpoint() returned null and the auth check was
+// skipped. JWT validation is handled by Ocelot's per-route "AuthenticationOptions" (the "Bearer"
+// scheme configured above), which is the idiomatic Ocelot approach.
 builder.Services.AddTransient<LoggingMiddleware>();
 
 var app = builder.Build();
@@ -118,11 +134,10 @@ app.UseAuthorization();
 
 // Use custom middleware
 app.UseMiddleware<LoggingMiddleware>();
-app.UseMiddleware<AuthenticationMiddleware>();
 
 app.UseHealthChecks("/health");
 
-app.UseOcelot().Wait();
+await app.UseOcelot();
 
 app.MapControllers();
 

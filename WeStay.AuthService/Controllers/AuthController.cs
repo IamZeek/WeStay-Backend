@@ -327,6 +327,73 @@ namespace WeStay.AuthService.Controllers
             }
         }
 
+        /// <summary>
+        /// Promote the currently authenticated user to Host (self-service).
+        /// Returns a fresh JWT carrying the new Host role so the client doesn't need to re-login.
+        /// </summary>
+        [HttpPost("become-host")]
+        [Authorize]
+        public async Task<IActionResult> BecomeHost()
+        {
+            try
+            {
+                var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
+                var user = await _userService.GetUserByIdAsync(userId);
+                if (user == null)
+                {
+                    return NotFound(new { Message = "User not found" });
+                }
+
+                if (user.Role == UserRole.Admin)
+                {
+                    return BadRequest(new { Message = "Admins cannot change their own role to Host." });
+                }
+
+                if (user.Role != UserRole.Host)
+                {
+                    user = await _userService.UpdateUserRoleAsync(userId, UserRole.Host);
+                }
+
+                // Re-issue the token so the Host role claim is available immediately.
+                var token = _jwtTokenGenerator.GenerateToken(user);
+                return Ok(new { Message = "You are now a Host.", Token = token, Role = user.Role.ToString() });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error promoting user to Host");
+                return StatusCode(500, new { Message = "An error occurred while updating your role" });
+            }
+        }
+
+        /// <summary>
+        /// Admin-only: set any user's role (Guest/Host/Admin). The target user must re-login
+        /// (or be re-issued a token) for their new role claim to take effect.
+        /// </summary>
+        [HttpPut("users/{id}/role")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> SetUserRole(int id, [FromBody] SetUserRoleRequest request)
+        {
+            try
+            {
+                if (!ModelState.IsValid)
+                {
+                    return BadRequest(new { Message = "Invalid role data", Errors = ModelState.Values.SelectMany(v => v.Errors) });
+                }
+
+                var user = await _userService.UpdateUserRoleAsync(id, request.Role);
+                return Ok(new { Message = $"User {id} role set to {user.Role}.", user.Id, Role = user.Role.ToString() });
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { Message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error setting role for user {UserId}", id);
+                return StatusCode(500, new { Message = "An error occurred while setting the user role" });
+            }
+        }
+
         // Add this method to the AuthController class
         [HttpPut("verification-update")]
         [Authorize]

@@ -2,6 +2,13 @@
 
 namespace WeStay.AuthService.Models
 {
+    public enum UserRole
+    {
+        Guest = 0,
+        Host = 1,
+        Admin = 2
+    }
+
     public class User
     {
         [Key]
@@ -37,6 +44,9 @@ namespace WeStay.AuthService.Models
         public DateTime UpdatedAt { get; set; }
 
         public bool IsActive { get; set; }
+
+        [Required]
+        public UserRole Role { get; set; } = UserRole.Guest;
 
         [MaxLength(255)]
         public string? ExternalId { get; set; }

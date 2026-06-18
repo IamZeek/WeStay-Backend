@@ -45,6 +45,14 @@ namespace WeStay.BookingService.Services
                 throw new InvalidOperationException("The listing is not available for the selected dates");
             }
 
+            // Validate guest count against the listing's max capacity (fetched from ListingService
+            // via the same HTTP-client pattern used for pricing).
+            var capacity = await GetListingCapacityAsync(booking.ListingId);
+            if (capacity.HasValue && booking.NumberOfGuests > capacity.Value)
+            {
+                throw new InvalidOperationException($"This listing accommodates at most {capacity.Value} guests.");
+            }
+
             // Get listing details to calculate price
             var listingPrice = await GetListingPriceAsync(booking.ListingId);
             if (listingPrice == null)
@@ -175,6 +183,32 @@ namespace WeStay.BookingService.Services
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error getting listing price for ID: {ListingId}", listingId);
+                return null;
+            }
+        }
+
+        private async Task<int?> GetListingCapacityAsync(int listingId)
+        {
+            try
+            {
+                var listingServiceUrl = _configuration["Services:ListingService"];
+                var response = await _httpClient.GetAsync($"{listingServiceUrl}/api/listings/{listingId}/capacity");
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var content = await response.Content.ReadAsStringAsync();
+                    if (int.TryParse(content, out var capacity))
+                    {
+                        return capacity;
+                    }
+                }
+
+                _logger.LogWarning("Failed to get listing capacity for ID: {ListingId}", listingId);
+                return null;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting listing capacity for ID: {ListingId}", listingId);
                 return null;
             }
         }

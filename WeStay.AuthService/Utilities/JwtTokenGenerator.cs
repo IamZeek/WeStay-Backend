@@ -23,7 +23,10 @@ namespace WeStay.AuthService.Utilities
         public string GenerateToken(User user)
         {
             var tokenHandler = new JwtSecurityTokenHandler();
-            var key = Encoding.ASCII.GetBytes(_configuration["Jwt:Key"]);
+            // Use UTF8 to match every validator (Gateway + downstream services all use
+            // Encoding.UTF8.GetBytes). For ASCII-only keys these are identical, but keeping
+            // them the same encoding guarantees the signature verifies regardless of key bytes.
+            var key = Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]);
             var tokenDescriptor = new SecurityTokenDescriptor
             {
                 Subject = new ClaimsIdentity(new[]
@@ -31,7 +34,8 @@ namespace WeStay.AuthService.Utilities
                     new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
                     new Claim(ClaimTypes.Email, user.Email),
                     new Claim(ClaimTypes.GivenName, user.FirstName),
-                    new Claim(ClaimTypes.Surname, user.LastName)
+                    new Claim(ClaimTypes.Surname, user.LastName),
+                    new Claim(ClaimTypes.Role, user.Role.ToString())
                 }),
                 Expires = DateTime.UtcNow.AddDays(7),
                 Issuer = _configuration["Jwt:Issuer"],

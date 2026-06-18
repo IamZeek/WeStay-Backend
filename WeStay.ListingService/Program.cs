@@ -22,6 +22,7 @@ builder.Services.AddDbContext<ListingDbContext>(options =>
 // Register services
 builder.Services.AddScoped<IListingService, ListingService>();
 builder.Services.AddScoped<ISearchService, SearchService>();
+builder.Services.AddScoped<IImageStorageService, AzureBlobImageStorageService>();
 
 // Configure JWT Authentication
 var jwtKey = builder.Configuration["Jwt:Key"];

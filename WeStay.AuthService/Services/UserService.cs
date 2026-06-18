@@ -58,6 +58,23 @@ namespace WeStay.AuthService.Services
             return await _context.Users.AnyAsync(u => u.Email == email);
         }
 
+        public async Task<User> UpdateUserRoleAsync(int id, UserRole role)
+        {
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == id);
+            if (user == null)
+            {
+                throw new KeyNotFoundException("User not found");
+            }
+
+            user.Role = role;
+            user.UpdatedAt = DateTime.UtcNow;
+            _context.Users.Update(user);
+            await _context.SaveChangesAsync();
+
+            _logger.LogInformation("Updated role for user {UserId} to {Role}", id, role);
+            return user;
+        }
+
         public async Task<bool> UpdateUserStatusAsync(int id,string type)
         {
             var user = await _context.Users.FirstOrDefaultAsync(x => x.Id == id);

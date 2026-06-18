@@ -1,4 +1,5 @@
 ﻿using System.ComponentModel.DataAnnotations;
+using WeStay.ListingService.Models;
 
 namespace WeStay.ListingService.Models.Requests
 {
@@ -6,6 +7,8 @@ namespace WeStay.ListingService.Models.Requests
     {
         [MaxLength(200)]
         public string Title { get; set; }
+
+        public ListingCategory? Category { get; set; }
 
         [MaxLength(1000)]
         public string Description { get; set; }

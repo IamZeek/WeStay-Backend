@@ -196,6 +196,40 @@ namespace WeStay.BookingService.Controllers
             }
         }
 
+        /// <summary>
+        /// Returns a day-by-day availability grid for a listing over a date range
+        /// (each entry: date + IsAvailable), for rendering an availability calendar.
+        /// </summary>
+        [HttpGet("availability-calendar/{listingId}")]
+        [AllowAnonymous]
+        public async Task<IActionResult> GetAvailabilityCalendar(int listingId, [FromQuery] DateTime startDate, [FromQuery] DateTime endDate)
+        {
+            try
+            {
+                if (startDate == default || endDate == default)
+                {
+                    return BadRequest(new { Message = "startDate and endDate query parameters are required" });
+                }
+
+                if ((endDate.Date - startDate.Date).TotalDays > 366)
+                {
+                    return BadRequest(new { Message = "Date range too large; maximum is 366 days" });
+                }
+
+                var calendar = await _availabilityService.GetAvailabilityCalendarAsync(listingId, startDate, endDate);
+                return Ok(new { ListingId = listingId, Calendar = calendar });
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { Message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error building availability calendar for listing {ListingId}", listingId);
+                return StatusCode(500, new { Message = "An error occurred while building the availability calendar" });
+            }
+        }
+
         [HttpPost("{id}/cancel")]
         public async Task<IActionResult> CancelBooking(int id, [FromBody] CancelBookingRequest request)
         {

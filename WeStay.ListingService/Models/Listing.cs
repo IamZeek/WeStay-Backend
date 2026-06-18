@@ -14,6 +14,14 @@ namespace WeStay.ListingService.Models
 
     }
 
+    // Listing purpose/intent — a separate dimension from the property ListingType above.
+    public enum ListingCategory
+    {
+        ShortTerm = 0,
+        LongTerm = 1,
+        Sale = 2
+    }
+
     public enum ListingStatus
     {
         Active,
@@ -40,6 +48,10 @@ namespace WeStay.ListingService.Models
 
         [Required]
         public ListingType Type { get; set; }
+
+        // Listing purpose/intent (short-term stay, long-term rental, or for sale).
+        [Required]
+        public ListingCategory Category { get; set; } = ListingCategory.ShortTerm;
 
         [Required]
         public int Guests { get; set; }
@@ -81,6 +93,10 @@ namespace WeStay.ListingService.Models
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+
+        // Featured/boosted listing. Toggled by Host (own listings) or Admin (any). No payment yet.
+        public bool IsFeatured { get; set; } = false;
+        public DateTime? FeaturedUntil { get; set; }
 
         // Navigation properties
         public virtual ICollection<Amenity> Amenities { get; set; }

@@ -1,125 +1,127 @@
 {
+  // Single source of truth for Gateway routing. Ports match each service's
+  // launchSettings.json (HTTPS): Auth 7019, Listing 7002, Booking 7292,
+  // Messaging 7179, Notification 7284. Routes are path-preserving (Upstream == Downstream).
+  //
+  // Auth model: routes that carry "AuthenticationOptions" are validated AT THE GATEWAY
+  // using the shared "Bearer" scheme (unified Jwt Key/Issuer/Audience). Routes without it
+  // are proxied with the Authorization header forwarded, and the downstream service enforces
+  // its own per-endpoint [Authorize]/[AllowAnonymous]. Public reads and the anonymous
+  // auth endpoints (register/login) are intentionally left open at the gateway.
   "Routes": [
-    {
-      "DownstreamPathTemplate": "/api/v1/auth/{everything}",
-      "DownstreamScheme": "https",
-      "DownstreamHostAndPorts": [
-        {
-          "Host": "localhost",
-          "Port": 7005
-        }
-      ],
-      "UpstreamPathTemplate": "/api/v1/auth/{everything}",
-      "UpstreamHttpMethod": [ "POST", "OPTIONS" ]
-    },
-    {
-      "DownstreamPathTemplate": "/api/v1/public/{everything}",
-      "DownstreamScheme": "https",
-      "DownstreamHostAndPorts": [
-        {
-          "Host": "localhost",
-          "Port": 7006
-        }
-      ],
-      "UpstreamPathTemplate": "/api/v1/public/{everything}",
-      "UpstreamHttpMethod": [ "GET", "OPTIONS" ]
-    },
 
-    // Private routes (require authentication)
+    // ---- AuthService (7019) ----
+    // Admin-only management endpoints (e.g. PUT /api/auth/users/{id}/role). The gateway enforces
+    // the role here via Ocelot's RouteClaimsRequirement against the "role" claim; AuthService also
+    // enforces [Authorize(Roles="Admin")] as the authoritative backstop. This more-specific route
+    // must precede the general /api/auth/{everything} route below.
     {
-      "DownstreamPathTemplate": "/api/v1/messaging/{everything}",
+      "DownstreamPathTemplate": "/api/auth/users/{everything}",
       "DownstreamScheme": "https",
-      "DownstreamHostAndPorts": [
-        {
-          "Host": "localhost",
-          "Port": 7001
-        }
-      ],
-      "UpstreamPathTemplate": "/api/v1/messaging/{everything}",
+      "DownstreamHostAndPorts": [ { "Host": "localhost", "Port": 7019 } ],
+      "UpstreamPathTemplate": "/api/auth/users/{everything}",
       "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE" ],
-      "AuthenticationOptions": {
-        "AuthenticationProviderKey": "Bearer",
-        "AllowedScopes": []
-      }
+      "AuthenticationOptions": { "AuthenticationProviderKey": "Bearer", "AllowedScopes": [] },
+      "RouteClaimsRequirement": { "role": "Admin" }
     },
 
-    // ListingService routes
+    // No gateway-level auth: register/login/external-login are anonymous; AuthService
+    // enforces [Authorize] on profile/change-password/become-host/OTP itself.
     {
-      "DownstreamPathTemplate": "/api/{everything}",
+      "DownstreamPathTemplate": "/api/auth/{everything}",
       "DownstreamScheme": "https",
-      "DownstreamHostAndPorts": [
-        {
-          "Host": "localhost",
-          "Port": 7002
-        }
-      ],
-      "UpstreamPathTemplate": "/api/listings/{everything}",
-      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE" ],
-      "AuthenticationOptions": {
-        "AuthenticationProviderKey": "Bearer",
-        "AllowedScopes": []
-      }
+      "DownstreamHostAndPorts": [ { "Host": "localhost", "Port": 7019 } ],
+      "UpstreamPathTemplate": "/api/auth/{everything}",
+      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE", "OPTIONS" ]
     },
 
-    // BookingService routes — repointed to WeStay.BookingService (port 7292) after
-    // booking endpoints were removed from ListingService in the Phase 1 de-duplication.
-    {
-      "DownstreamPathTemplate": "/api/bookings/{everything}",
-      "DownstreamScheme": "https",
-      "DownstreamHostAndPorts": [
-        {
-          "Host": "localhost",
-          "Port": 7292
-        }
-      ],
-      "UpstreamPathTemplate": "/api/bookings/{everything}",
-      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE" ],
-      "AuthenticationOptions": {
-        "AuthenticationProviderKey": "Bearer",
-        "AllowedScopes": []
-      }
-    },
-    {
-      "DownstreamPathTemplate": "/api/{everything}",
-      "DownstreamScheme": "https",
-      "DownstreamHostAndPorts": [
-        {
-          "Host": "localhost",
-          "Port": 7002
-        }
-      ],
-      "UpstreamPathTemplate": "/api/search/{everything}",
-      "UpstreamHttpMethod": [ "GET" ],
-      "AuthenticationOptions": {
-        "AuthenticationProviderKey": "Bearer",
-        "AllowedScopes": []
-      }
-    },
-
-    // Public endpoints (no authentication required)
-    {
-      "DownstreamPathTemplate": "/api/search/{everything}",
-      "DownstreamScheme": "https",
-      "DownstreamHostAndPorts": [
-        {
-          "Host": "localhost",
-          "Port": 7002
-        }
-      ],
-      "UpstreamPathTemplate": "/api/public/search/{everything}",
-      "UpstreamHttpMethod": [ "GET" ]
-    },
+    // ---- ListingService (7002) ----
+    // Public reads: GetListing and the /price lookup are [AllowAnonymous].
     {
       "DownstreamPathTemplate": "/api/listings/{everything}",
       "DownstreamScheme": "https",
-      "DownstreamHostAndPorts": [
-        {
-          "Host": "localhost",
-          "Port": 7002
-        }
-      ],
-      "UpstreamPathTemplate": "/api/public/listings/{everything}",
-      "UpstreamHttpMethod": [ "GET" ]
+      "DownstreamHostAndPorts": [ { "Host": "localhost", "Port": 7002 } ],
+      "UpstreamPathTemplate": "/api/listings/{everything}",
+      "UpstreamHttpMethod": [ "GET", "OPTIONS" ]
+    },
+    // Writes (create/update/delete/status) require a valid token — validated at the gateway.
+    {
+      "DownstreamPathTemplate": "/api/listings/{everything}",
+      "DownstreamScheme": "https",
+      "DownstreamHostAndPorts": [ { "Host": "localhost", "Port": 7002 } ],
+      "UpstreamPathTemplate": "/api/listings/{everything}",
+      "UpstreamHttpMethod": [ "POST", "PUT", "DELETE", "PATCH" ],
+      "AuthenticationOptions": { "AuthenticationProviderKey": "Bearer", "AllowedScopes": [] }
+    },
+    // Search is public.
+    {
+      "DownstreamPathTemplate": "/api/search/{everything}",
+      "DownstreamScheme": "https",
+      "DownstreamHostAndPorts": [ { "Host": "localhost", "Port": 7002 } ],
+      "UpstreamPathTemplate": "/api/search/{everything}",
+      "UpstreamHttpMethod": [ "GET", "OPTIONS" ]
+    },
+
+    // ---- BookingService (7292) ----
+    // Availability reads are [AllowAnonymous].
+    {
+      "DownstreamPathTemplate": "/api/bookings/{everything}",
+      "DownstreamScheme": "https",
+      "DownstreamHostAndPorts": [ { "Host": "localhost", "Port": 7292 } ],
+      "UpstreamPathTemplate": "/api/bookings/{everything}",
+      "UpstreamHttpMethod": [ "GET", "OPTIONS" ]
+    },
+    // Create/cancel bookings require a valid token — validated at the gateway.
+    {
+      "DownstreamPathTemplate": "/api/bookings/{everything}",
+      "DownstreamScheme": "https",
+      "DownstreamHostAndPorts": [ { "Host": "localhost", "Port": 7292 } ],
+      "UpstreamPathTemplate": "/api/bookings/{everything}",
+      "UpstreamHttpMethod": [ "POST", "PUT", "DELETE" ],
+      "AuthenticationOptions": { "AuthenticationProviderKey": "Bearer", "AllowedScopes": [] }
+    },
+
+    // ---- MessagingService (7179) ----
+    // Conversations and messages are fully [Authorize] — validated at the gateway.
+    {
+      "DownstreamPathTemplate": "/api/conversations/{everything}",
+      "DownstreamScheme": "https",
+      "DownstreamHostAndPorts": [ { "Host": "localhost", "Port": 7179 } ],
+      "UpstreamPathTemplate": "/api/conversations/{everything}",
+      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE" ],
+      "AuthenticationOptions": { "AuthenticationProviderKey": "Bearer", "AllowedScopes": [] }
+    },
+    {
+      "DownstreamPathTemplate": "/api/messages/{everything}",
+      "DownstreamScheme": "https",
+      "DownstreamHostAndPorts": [ { "Host": "localhost", "Port": 7179 } ],
+      "UpstreamPathTemplate": "/api/messages/{everything}",
+      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE" ],
+      "AuthenticationOptions": { "AuthenticationProviderKey": "Bearer", "AllowedScopes": [] }
+    },
+    // File upload requires auth in the service; download is anonymous, so left open at the gateway.
+    {
+      "DownstreamPathTemplate": "/api/fileupload/{everything}",
+      "DownstreamScheme": "https",
+      "DownstreamHostAndPorts": [ { "Host": "localhost", "Port": 7179 } ],
+      "UpstreamPathTemplate": "/api/fileupload/{everything}",
+      "UpstreamHttpMethod": [ "GET", "POST", "OPTIONS" ]
+    },
+
+    // ---- NotificationService (7284) ----
+    // SMS endpoints (NotificationService enforces [Authorize]; send-verification is anonymous).
+    // NOTE: the internal /api/notifications/* email+SMS trigger endpoints are deliberately
+    // NOT routed here — they are service-to-service only (see PROJECT_STATUS.md security note).
+    {
+      "DownstreamPathTemplate": "/api/sms/{everything}",
+      "DownstreamScheme": "https",
+      "DownstreamHostAndPorts": [ { "Host": "localhost", "Port": 7284 } ],
+      "UpstreamPathTemplate": "/api/sms/{everything}",
+      "UpstreamHttpMethod": [ "GET", "POST", "OPTIONS" ]
     }
-  ]
+  ],
+
+  "GlobalConfiguration": {
+    "BaseUrl": "https://localhost:7087"
+  }
 }
