@@ -21,6 +21,11 @@ namespace WeStay.Tests.Infrastructure
         public static string Messaging => Url("Messaging", "https://localhost:7179");
         public static string Notification => Url("Notification", "https://localhost:7284");
 
+        // Shared internal service key — must match each service's ServiceAuth:InternalApiKey
+        // (set in their User Secrets). Tests attach it when calling internal endpoints.
+        public static string InternalApiKey =>
+            Config["ServiceAuth:InternalApiKey"] ?? "westay-dev-internal-key-change-in-prod";
+
         private static string Url(string key, string fallback) => Config[$"BaseUrls:{key}"] ?? fallback;
     }
 }

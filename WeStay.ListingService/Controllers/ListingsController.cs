@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using WeStay.ListingService.Models.Requests;
+using WeStay.ListingService.Security;
 using WeStay.ListingService.Services.Interfaces;
 using System.Security.Claims;
 using WeStay.ListingService.Models.Requests;
@@ -74,7 +75,8 @@ namespace WeStay.ListingService.Controllers
         /// (GET /api/listings/{id}/price). Returns the bare decimal value in the response body.
         /// </summary>
         [HttpGet("{id}/price")]
-        [AllowAnonymous] // Called service-to-service by BookingService without a user token
+        [AllowAnonymous] // No user JWT...
+        [ServiceAuth]    // ...but a valid internal service key is required.
         public async Task<IActionResult> GetListingPrice(int id)
         {
             try
@@ -100,7 +102,8 @@ namespace WeStay.ListingService.Controllers
         /// guest counts (GET /api/listings/{id}/capacity). Returns the bare integer in the body.
         /// </summary>
         [HttpGet("{id}/capacity")]
-        [AllowAnonymous] // Called service-to-service by BookingService without a user token
+        [AllowAnonymous] // No user JWT...
+        [ServiceAuth]    // ...but a valid internal service key is required.
         public async Task<IActionResult> GetListingCapacity(int id)
         {
             try
@@ -126,7 +129,8 @@ namespace WeStay.ListingService.Controllers
         /// Returns the bare integer HostId.
         /// </summary>
         [HttpGet("{id}/owner")]
-        [AllowAnonymous] // Called service-to-service by BookingService without a user token
+        [AllowAnonymous] // No user JWT...
+        [ServiceAuth]    // ...but a valid internal service key is required.
         public async Task<IActionResult> GetListingOwner(int id)
         {
             try
@@ -152,7 +156,8 @@ namespace WeStay.ListingService.Controllers
         /// (PUT /api/listings/{id}/rating).
         /// </summary>
         [HttpPut("{id}/rating")]
-        [AllowAnonymous] // Called service-to-service by ReviewService without a user token
+        [AllowAnonymous] // No user JWT...
+        [ServiceAuth]    // ...but a valid internal service key is required.
         public async Task<IActionResult> UpdateRating(int id, [FromBody] UpdateRatingRequest request)
         {
             try

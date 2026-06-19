@@ -16,10 +16,22 @@ builder.Services.AddDbContext<ReviewDbContext>(options =>
     options.UseSqlServer(connectionString));
 
 builder.Services.AddScoped<IReviewService, ReviewService>();
-builder.Services.AddHttpClient();
+// Default client calls protected internal endpoints (BookingService /info, ListingService
+// /rating + /owner, AuthService /contact), so send the shared internal service key.
+builder.Services.AddHttpClient(string.Empty, c =>
+{
+    var internalKey = builder.Configuration["ServiceAuth:InternalApiKey"];
+    if (!string.IsNullOrEmpty(internalKey)) c.DefaultRequestHeaders.Add("X-Internal-Api-Key", internalKey);
+});
 // Delegates the "review posted" email to NotificationService over HTTP (best-effort).
 // Short timeout so a slow/unreachable NotificationService can never stall a review write.
-builder.Services.AddHttpClient<NotificationClient>(c => c.Timeout = TimeSpan.FromSeconds(5));
+// Sends the shared internal service key (NotificationService's /email + /sms require it).
+builder.Services.AddHttpClient<NotificationClient>(c =>
+{
+    c.Timeout = TimeSpan.FromSeconds(5);
+    var internalKey = builder.Configuration["ServiceAuth:InternalApiKey"];
+    if (!string.IsNullOrEmpty(internalKey)) c.DefaultRequestHeaders.Add("X-Internal-Api-Key", internalKey);
+});
 
 // JWT Authentication (unified with the rest of WeStay).
 var jwtKey = builder.Configuration["Jwt:Key"];

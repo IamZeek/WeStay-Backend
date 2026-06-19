@@ -25,22 +25,22 @@ namespace WeStay.Tests.Infrastructure
             };
         }
 
-        public Task<HttpResponseMessage> GetAsync(string path, string? token = null)
-            => Send(HttpMethod.Get, path, null, token);
+        public Task<HttpResponseMessage> GetAsync(string path, string? token = null, string? internalKey = null)
+            => Send(HttpMethod.Get, path, null, token, internalKey);
 
-        public Task<HttpResponseMessage> PostAsync(string path, object? body = null, string? token = null)
-            => Send(HttpMethod.Post, path, body, token);
+        public Task<HttpResponseMessage> PostAsync(string path, object? body = null, string? token = null, string? internalKey = null)
+            => Send(HttpMethod.Post, path, body, token, internalKey);
 
-        public Task<HttpResponseMessage> PutAsync(string path, object? body = null, string? token = null)
-            => Send(HttpMethod.Put, path, body, token);
+        public Task<HttpResponseMessage> PutAsync(string path, object? body = null, string? token = null, string? internalKey = null)
+            => Send(HttpMethod.Put, path, body, token, internalKey);
 
         public Task<HttpResponseMessage> PatchAsync(string path, object? body = null, string? token = null)
-            => Send(HttpMethod.Patch, path, body, token);
+            => Send(HttpMethod.Patch, path, body, token, null);
 
         public Task<HttpResponseMessage> DeleteAsync(string path, string? token = null)
-            => Send(HttpMethod.Delete, path, null, token);
+            => Send(HttpMethod.Delete, path, null, token, null);
 
-        private Task<HttpResponseMessage> Send(HttpMethod method, string path, object? body, string? token)
+        private Task<HttpResponseMessage> Send(HttpMethod method, string path, object? body, string? token, string? internalKey)
         {
             var request = new HttpRequestMessage(method, path);
             if (body is not null)
@@ -50,6 +50,10 @@ namespace WeStay.Tests.Infrastructure
             if (!string.IsNullOrEmpty(token))
             {
                 request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            }
+            if (!string.IsNullOrEmpty(internalKey))
+            {
+                request.Headers.Add("X-Internal-Api-Key", internalKey);
             }
             return _http.SendAsync(request);
         }

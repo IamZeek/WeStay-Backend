@@ -5,6 +5,7 @@ using WeStay.BookingService.Models;
 using WeStay.BookingService.Services.Interfaces;
 using System.Security.Claims;
 using System.ComponentModel.DataAnnotations;
+using WeStay.BookingService.Security;
 using WeStay.BookingService.Services;
 
 namespace WeStay.BookingService.Controllers
@@ -381,7 +382,8 @@ namespace WeStay.BookingService.Controllers
         /// to validate review eligibility. Anonymous — called over HTTP without a user token.
         /// </summary>
         [HttpGet("{id}/info")]
-        [AllowAnonymous]
+        [AllowAnonymous] // No user JWT...
+        [ServiceAuth]    // ...but a valid internal service key is required.
         public async Task<IActionResult> GetBookingInfo(int id)
         {
             try

@@ -133,8 +133,14 @@ builder.Services.AddCors(options =>
     });
 });
 
-// Add HttpClient for communicating with other services
-builder.Services.AddHttpClient();
+// Add HttpClient for communicating with other services. NotificationServices delegates Email/SMS
+// to NotificationService's /email + /sms, which require the shared internal service key — so attach
+// it here too (message-notifications aren't actively fired yet, but this avoids a future 401).
+builder.Services.AddHttpClient(string.Empty, c =>
+{
+    var internalKey = builder.Configuration["ServiceAuth:InternalApiKey"];
+    if (!string.IsNullOrEmpty(internalKey)) c.DefaultRequestHeaders.Add("X-Internal-Api-Key", internalKey);
+});
 
 var app = builder.Build();
 

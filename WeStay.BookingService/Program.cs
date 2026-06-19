@@ -54,7 +54,13 @@ builder.Services.AddScoped<IBookingService,BookingService>();
 builder.Services.AddScoped<IAvailabilityService, AvailabilityService>();
 // Delegates Email/SMS for booking events to NotificationService over HTTP (best-effort).
 // Short timeout so a slow/unreachable NotificationService can never stall a booking operation.
-builder.Services.AddHttpClient<NotificationClient>(c => c.Timeout = TimeSpan.FromSeconds(5));
+// Sends the shared internal service key (NotificationService's /email + /sms require it).
+builder.Services.AddHttpClient<NotificationClient>(c =>
+{
+    c.Timeout = TimeSpan.FromSeconds(5);
+    var internalKey = builder.Configuration["ServiceAuth:InternalApiKey"];
+    if (!string.IsNullOrEmpty(internalKey)) c.DefaultRequestHeaders.Add("X-Internal-Api-Key", internalKey);
+});
 
 // Background jobs for automatic booking state transitions (intervals/window in the "Booking" config).
 builder.Services.AddHostedService<BookingCompletionService>();
@@ -110,8 +116,13 @@ builder.Services.AddCors(options =>
     });
 });
 
-// Add HttpClient for communicating with other services
-builder.Services.AddHttpClient();
+// Add HttpClient for communicating with other services (price/capacity/owner on ListingService,
+// contact on AuthService — all protected internal endpoints, so send the shared service key).
+builder.Services.AddHttpClient(string.Empty, c =>
+{
+    var internalKey = builder.Configuration["ServiceAuth:InternalApiKey"];
+    if (!string.IsNullOrEmpty(internalKey)) c.DefaultRequestHeaders.Add("X-Internal-Api-Key", internalKey);
+});
 
 var app = builder.Build();
 

@@ -9,6 +9,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using WeStay.AuthService.Models;
 using WeStay.AuthService.Models.Requests;
+using WeStay.AuthService.Security;
 using WeStay.AuthService.Services;
 using WeStay.AuthService.Services.Interfaces;
 using WeStay.AuthService.Utilities;
@@ -436,7 +437,8 @@ namespace WeStay.AuthService.Controllers
         /// production); the gateway keeps /api/auth/users/* Admin-gated for external callers.
         /// </summary>
         [HttpGet("users/{id}/contact")]
-        [AllowAnonymous]
+        [AllowAnonymous] // No user JWT...
+        [ServiceAuth]    // ...but a valid internal service key is required.
         public async Task<IActionResult> GetUserContact(int id)
         {
             try

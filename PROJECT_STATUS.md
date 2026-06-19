@@ -3,7 +3,7 @@
 **Last verified:** 2026-06-19
 **Basis:** Inspected directly against current source code and the live remote SQL Server (all six databases). Supersedes earlier versions.
 
-**6 active services**, each with its **own database** and EF Core **migrations** (no `EnsureCreated()` anywhere). JWT is unified across services and the gateway. An HTTP-level integration test suite (`WeStay.Tests`, through the gateway) passes **36/36**.
+**6 active services**, each with its **own database** and EF Core **migrations** (no `EnsureCreated()` anywhere). JWT is unified across services and the gateway. An HTTP-level integration test suite (`WeStay.Tests`, through the gateway) passes **44/44**.
 
 ## Database map
 
@@ -35,7 +35,7 @@
 | PUT | `/api/auth/users/{id}/role` | **Admin** |
 | PUT | `/api/auth/verification-update` | Authenticated |
 | POST | `/api/auth/send-otp-phone` / `verify-otp-phone` / `send-otp-email` / `verify-otp-email` | Authenticated |
-| GET | `/api/auth/users/{id}/contact` | Anonymous (service-to-service — used by Booking/Review to address notifications) |
+| GET | `/api/auth/users/{id}/contact` | **`[ServiceAuth]`** (internal service key — used by Booking/Review to address notifications) |
 
 JWT carries a `role` claim (Guest/Host/Admin). Google OAuth is conditional (registered only when configured); Facebook removed. No stubs. Smells: phone-OTP stored in-memory (no TTL); `verify-otp-phone` binds `dynamic`. **Tracked inconsistency:** the OTP send paths call providers **directly** — phone via Twilio in `PhoneVerificationService`, email via SendGrid in `EmailService` — rather than going through NotificationService like the other event notifications. Functional, but bypasses the unified path; candidate to migrate later.
 
@@ -53,10 +53,10 @@ JWT carries a `role` claim (Guest/Host/Admin). Google OAuth is conditional (regi
 |---|---|---|
 | GET | `/api/listings` | Authenticated (host's own) |
 | GET | `/api/listings/{id}` | Anonymous |
-| GET | `/api/listings/{id}/price` | Anonymous (service-to-service) |
-| GET | `/api/listings/{id}/capacity` | Anonymous (service-to-service) |
-| GET | `/api/listings/{id}/owner` | Anonymous (service-to-service) |
-| PUT | `/api/listings/{id}/rating` | Anonymous (service-to-service — ReviewService) |
+| GET | `/api/listings/{id}/price` | **`[ServiceAuth]`** (internal service key) |
+| GET | `/api/listings/{id}/capacity` | **`[ServiceAuth]`** (internal service key) |
+| GET | `/api/listings/{id}/owner` | **`[ServiceAuth]`** (internal service key) |
+| PUT | `/api/listings/{id}/rating` | **`[ServiceAuth]`** (internal service key — ReviewService) |
 | POST | `/api/listings/upload-image` | Authenticated |
 | POST | `/api/listings` | Authenticated |
 | PUT | `/api/listings/{id}` | Authenticated |
@@ -82,7 +82,7 @@ Photo upload → Azure Blob (`AzureBlobStorage:ConnectionString` required). Sear
 | GET | `/api/bookings/{id}` | Authenticated (ownership-checked) |
 | GET | `/api/bookings/code/{bookingCode}` | Authenticated |
 | GET | `/api/bookings/user/{userId}` | Authenticated |
-| GET | `/api/bookings/{id}/info` | Anonymous (service-to-service — ReviewService) |
+| GET | `/api/bookings/{id}/info` | **`[ServiceAuth]`** (internal service key — ReviewService) |
 | POST | `/api/bookings/availability` | Anonymous |
 | GET | `/api/bookings/availability-calendar/{listingId}` | Anonymous |
 | POST | `/api/bookings/{id}/cancel` | Authenticated (guest/admin) |
@@ -129,7 +129,7 @@ All `[Authorize]` except file download. `ConversationsController` (9 endpoints),
 
 ## 5. NotificationService (`WeStayNotification`)
 
-`SMSController` (send auth, send-verification anon, validate/format-phone auth) + internal `NotificationsController` (`/api/notifications/email`, `/sms` — anon, service-to-service, **not** gateway-routed). Email (SendGrid + SMTP) and SMS (Twilio) work; a background processor polls pending notifications every 60s. **Stub:** Push (FCM) send-code exists but `GetUserFcmTokensAsync` returns empty (no device-token store) → push can't deliver.
+`SMSController` (send auth, send-verification anon, validate/format-phone auth) + internal `NotificationsController` (`/api/notifications/email`, `/sms` — `[ServiceAuth]` internal-key-gated, service-to-service, **not** gateway-routed). Email (SendGrid + SMTP) and SMS (Twilio) work; a background processor polls pending notifications every 60s. **Stub:** Push (FCM) send-code exists but `GetUserFcmTokensAsync` returns empty (no device-token store) → push can't deliver.
 
 **Event-driven notifications (wired):** 9 business events now trigger Email/SMS here via direct HTTP — BookingService (created→host SMS+Email, confirmed→guest SMS+Email, rejected→guest, cancelled→other party, auto-cancelled→guest), AuthService (registration→welcome email), ReviewService (review posted→host). Each producing service has its own `NotificationClient` (mirrors `MessagingService/Services/NotificationServices.cs`) and dispatches **fire-and-forget on a background `Task` with its own DI scope** (`IServiceScopeFactory`) — a slow/unavailable NotificationService adds **zero latency** and can never fail the triggering operation. Recipient contact is resolved via `GET /api/auth/users/{id}/contact`; message **content** stays within each producer's own data (booking code / ids / dates), no cross-service enrichment. Note: `SendEmailRequest.TextContent` is effectively required (non-nullable), so each `NotificationClient` sends a plaintext fallback derived from the HTML. No event bus — direct HTTP is the Phase 1 choice.
 
@@ -177,15 +177,21 @@ Create validates over HTTP (`GET /api/bookings/{id}/info`): booking exists + **C
 | 7 | Inquiry/messaging (long-term & sale) | **Done\*** | Conversations/messages/real-time/attachments, linked to listings/bookings. *Caveat: new-message notifications not wired.* |
 | 8 | Email + SMS notifications | **Done** | Sending (SendGrid/SMTP + Twilio) wired to **9 app events** (booking/auth/review) via direct HTTP, fire-and-forget background dispatch. Push still stubbed (no device-token store); OTP still on direct provider SDKs (tracked). |
 | 9 | Featured/boosted listings | **Done** | `IsFeatured`/`FeaturedUntil`, real featured query, Host/Admin toggle. (No paid-boost flow — as scoped.) |
-| 10 | Admin capabilities | **Partial** | Role system + Admin-gated `set-role` + gateway enforcement, but no admin *operations* endpoints (moderation, verification approval, all-bookings view). |
+| 10 | Admin capabilities | **Done** | Role system + Admin-gated `set-role`/gateway enforcement, plus admin *operations*: KYC moderation (list/approve/reject), listing moderation (force-deactivate/reactivate + all-listings view, owner-ban-override blocked), and the all-bookings overview. |
 
 **Beyond Phase 1 (built):** Reviews & star ratings (Phase 3, this service), ID verification (KYC), OTP (phone/email), SignalR chat + attachments, notification preferences + i18n templating, multi-guest bookings, discovery endpoints (`similar`/`popular-locations`/`stats`), booking confirm/reject/complete lifecycle.
 
 ---
 
+## Service-to-service auth (built)
+
+The internal/service-to-service endpoints are protected by a shared static API key (a "service token"), enforced by a per-service `[ServiceAuth]` attribute (`Security/ServiceAuthAttribute.cs`) that compares header `X-Internal-Api-Key` to config `ServiceAuth:InternalApiKey` (constant-time; **fail-closed** — 401 on missing/invalid, 500 if the server has none configured). **8 endpoints gated:** ListingService `/price`, `/capacity`, `/owner`, `/rating`; BookingService `/info`; AuthService `/api/auth/users/{id}/contact`; NotificationService `/api/notifications/email`, `/sms`. They stay `[AllowAnonymous]` (no user JWT) but require the key, so they're callable **service-to-service only** — not via the gateway with a normal user JWT (the wildcard-routed ones return 401; `/api/notifications/*` isn't routed at all). Callers attach the header automatically (the `NotificationClient`s + the cross-service `HttpClient`s in Booking/Review/Auth). The key lives in **User Secrets across all 6 services** that call/host these — Auth, Listing, Booking, Notification, Review, **and MessagingService** (wired for forward-compat, though its notification path isn't firing yet). Dev-default `westay-dev-internal-key-change-in-prod`; production must override `ServiceAuth:InternalApiKey` (fail-closed if unset).
+
+---
+
 ## Quality / testing
 
-- **Integration tests:** `WeStay.Tests` (xUnit, HTTP-level via the gateway) — **36/36 passing**. Covers auth chain, roles, listing CRUD + category + map fields, price/capacity cross-service calls, booking flow + capacity, booking confirm/reject (+ ownership/status guards), the auto-complete / auto-cancel jobs (incl. Admin-only enforcement → 403 for non-admins), and reviews (eligibility, ownership, double-review, summary average). The suite runs **serially** (`DisableTestParallelization`) because the job tests trigger global batch sweeps.
+- **Integration tests:** `WeStay.Tests` (xUnit, HTTP-level via the gateway) — **44/44 passing**. Covers auth chain, roles, listing CRUD + category + map fields, price/capacity cross-service calls, booking flow + capacity, booking confirm/reject (+ ownership/status guards), the auto-complete / auto-cancel jobs (incl. Admin-only enforcement → 403 for non-admins), admin moderation (KYC approve/reject, listing deactivate/reactivate + owner-ban-override block, all-bookings overview, non-admin → 403), **service-to-service auth (each of the 7 internal endpoints → 401 without the key)**, and reviews (eligibility, ownership, double-review, summary average). **Now needs all six services running** (Auth, Listing, Booking, Review, **Notification**, Gateway) — NotificationService became required for the `/api/notifications/email`+`/sms` rejection tests (called directly on port 7284). Tests attach the internal key (`TestConfig.InternalApiKey`, matching the services' `ServiceAuth:InternalApiKey`) when calling internal endpoints. Runs **serially** (`DisableTestParallelization`) because the job tests trigger global batch sweeps.
 - **Migrations:** all six data services on their own databases; `EnsureCreated()` removed.
 - **Secrets:** none committed; read from User Secrets / environment variables. `appsettings.json` are placeholder-only; `appsettings.Development.json`/`Production.json` git-ignored.
 
@@ -195,7 +201,8 @@ Create validates over HTTP (`GET /api/bookings/{id}/info`): booking exists + **C
 
 1. **JazzCash payment (#6)** — the only Not-Started Phase 1 item; fills the `BookingPayments` scaffold (initiate + webhook) and enables Refunded.
 2. **Admin operations (#10)** — moderation, verification approval, bookings overview on top of the role system.
-3. **Service-to-service auth** — the internal `[AllowAnonymous]` endpoints (`/price`, `/capacity`, `/owner`, `/info`, `/rating`, `/api/auth/users/{id}/contact`, `/notifications/*`) need a service token or network restriction before production (today reachable by any authenticated user through the gateway's write routes). *(The `/jobs/*` triggers are already Admin-only.)*
-4. **Schema cleanup** — remove the redundant `Bookings.BookingStatusId` shadow FK; implement the FCM device-token store for push.
+3. **Schema cleanup** — remove the redundant `Bookings.BookingStatusId` shadow FK; implement the FCM device-token store for push.
+
+*(Done since the last revision: **service-to-service auth** — the internal endpoints are now `[ServiceAuth]`-key-gated, no longer relying on network trust. See "Service-to-service auth (built)" above.)*
 
 **Tracked (not urgent):** OTP phone/email still send via direct Twilio/SendGrid SDK calls in AuthService (`PhoneVerificationService` / `EmailService`), bypassing NotificationService — migrate to a `NotificationClient` call to unify with the other 9 event notifications. A real **message bus** would later replace the direct-HTTP + background-dispatch approach for all cross-service events.

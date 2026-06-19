@@ -30,7 +30,13 @@ builder.Services.AddScoped<IEmailService, EmailService>();
 
 // Thin client that delegates event-driven Email/SMS to NotificationService over HTTP.
 // Short timeout so a slow/unreachable NotificationService can never stall registration.
-builder.Services.AddHttpClient<NotificationClient>(c => c.Timeout = TimeSpan.FromSeconds(5));
+// Sends the shared internal service key (NotificationService's /email + /sms require it).
+builder.Services.AddHttpClient<NotificationClient>(c =>
+{
+    c.Timeout = TimeSpan.FromSeconds(5);
+    var internalKey = builder.Configuration["ServiceAuth:InternalApiKey"];
+    if (!string.IsNullOrEmpty(internalKey)) c.DefaultRequestHeaders.Add("X-Internal-Api-Key", internalKey);
+});
 
 
 // Configure JWT Authentication

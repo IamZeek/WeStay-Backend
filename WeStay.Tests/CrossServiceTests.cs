@@ -11,7 +11,8 @@ namespace WeStay.Tests
             var (_, _, token) = await Flows.RegisterAsync(api);
             var listing = await Flows.CreateListingAsync(api, token, ListingCategory.ShortTerm, pricePerNight: 123.45m);
 
-            var response = await api.GetAsync($"/api/listings/{listing.Id}/price");
+            // /price is internal (service-to-service): requires the shared internal service key.
+            var response = await api.GetAsync($"/api/listings/{listing.Id}/price", internalKey: TestConfig.InternalApiKey);
             response.EnsureSuccessStatusCode();
 
             var body = await response.Content.ReadAsStringAsync();
@@ -27,7 +28,8 @@ namespace WeStay.Tests
             var (_, _, token) = await Flows.RegisterAsync(api);
             var listing = await Flows.CreateListingAsync(api, token, ListingCategory.ShortTerm, guests: 6);
 
-            var response = await api.GetAsync($"/api/listings/{listing.Id}/capacity");
+            // /capacity is internal (service-to-service): requires the shared internal service key.
+            var response = await api.GetAsync($"/api/listings/{listing.Id}/capacity", internalKey: TestConfig.InternalApiKey);
             response.EnsureSuccessStatusCode();
 
             var body = await response.Content.ReadAsStringAsync();

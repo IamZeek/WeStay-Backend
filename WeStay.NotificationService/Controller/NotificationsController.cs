@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel.DataAnnotations;
+using WeStay.NotificationService.Security;
 using WeStay.NotificationService.Services.Interfaces;
 
 namespace WeStay.NotificationService.Controllers
@@ -37,7 +38,8 @@ namespace WeStay.NotificationService.Controllers
         /// Send an email. Called service-to-service.
         /// </summary>
         [HttpPost("email")]
-        [AllowAnonymous]
+        [AllowAnonymous] // No user JWT...
+        [ServiceAuth]    // ...but a valid internal service key is required.
         public async Task<IActionResult> SendEmail([FromBody] SendEmailRequest request)
         {
             try
@@ -65,7 +67,8 @@ namespace WeStay.NotificationService.Controllers
         /// Send an SMS. Called service-to-service.
         /// </summary>
         [HttpPost("sms")]
-        [AllowAnonymous]
+        [AllowAnonymous] // No user JWT...
+        [ServiceAuth]    // ...but a valid internal service key is required.
         public async Task<IActionResult> SendSms([FromBody] SendSmsRequest request)
         {
             try

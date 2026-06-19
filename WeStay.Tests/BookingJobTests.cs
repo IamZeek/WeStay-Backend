@@ -7,7 +7,9 @@ namespace WeStay.Tests
     {
         private static async Task<string> GetStatusAsync(ApiClient api, int bookingId)
         {
-            var info = await Json.ReadAsync<BookingStatusInfo>(await api.GetAsync($"/api/bookings/{bookingId}/info"));
+            // /info is internal (service-to-service): requires the shared internal service key.
+            var info = await Json.ReadAsync<BookingStatusInfo>(
+                await api.GetAsync($"/api/bookings/{bookingId}/info", internalKey: TestConfig.InternalApiKey));
             return info.Status;
         }
 
