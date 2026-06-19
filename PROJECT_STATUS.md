@@ -35,8 +35,9 @@
 | PUT | `/api/auth/users/{id}/role` | **Admin** |
 | PUT | `/api/auth/verification-update` | Authenticated |
 | POST | `/api/auth/send-otp-phone` / `verify-otp-phone` / `send-otp-email` / `verify-otp-email` | Authenticated |
+| GET | `/api/auth/users/{id}/contact` | Anonymous (service-to-service — used by Booking/Review to address notifications) |
 
-JWT carries a `role` claim (Guest/Host/Admin). Google OAuth is conditional (registered only when configured); Facebook removed. No stubs. Smells: phone-OTP stored in-memory (no TTL); `verify-otp-phone` binds `dynamic`.
+JWT carries a `role` claim (Guest/Host/Admin). Google OAuth is conditional (registered only when configured); Facebook removed. No stubs. Smells: phone-OTP stored in-memory (no TTL); `verify-otp-phone` binds `dynamic`. **Tracked inconsistency:** the OTP send paths call providers **directly** — phone via Twilio in `PhoneVerificationService`, email via SendGrid in `EmailService` — rather than going through NotificationService like the other event notifications. Functional, but bypasses the unified path; candidate to migrate later.
 
 **Admin seed:** on startup AuthService idempotently ensures an admin user exists (creates it, or promotes an existing user with that email to Admin). Config keys: `AdminSeed:Email` (default `admin@westay.local`) and `AdminSeed:Password`. In **Development** a dev-default password (`Admin123!`) is used so the app/tests have an admin out of the box; in **other environments** the admin is seeded **only** when `AdminSeed:Password` is explicitly configured — a default-password admin is never seeded in production. Override both via User Secrets / env vars.
 
@@ -130,6 +131,8 @@ All `[Authorize]` except file download. `ConversationsController` (9 endpoints),
 
 `SMSController` (send auth, send-verification anon, validate/format-phone auth) + internal `NotificationsController` (`/api/notifications/email`, `/sms` — anon, service-to-service, **not** gateway-routed). Email (SendGrid + SMTP) and SMS (Twilio) work; a background processor polls pending notifications every 60s. **Stub:** Push (FCM) send-code exists but `GetUserFcmTokensAsync` returns empty (no device-token store) → push can't deliver.
 
+**Event-driven notifications (wired):** 9 business events now trigger Email/SMS here via direct HTTP — BookingService (created→host SMS+Email, confirmed→guest SMS+Email, rejected→guest, cancelled→other party, auto-cancelled→guest), AuthService (registration→welcome email), ReviewService (review posted→host). Each producing service has its own `NotificationClient` (mirrors `MessagingService/Services/NotificationServices.cs`) and dispatches **fire-and-forget on a background `Task` with its own DI scope** (`IServiceScopeFactory`) — a slow/unavailable NotificationService adds **zero latency** and can never fail the triggering operation. Recipient contact is resolved via `GET /api/auth/users/{id}/contact`; message **content** stays within each producer's own data (booking code / ids / dates), no cross-service enrichment. Note: `SendEmailRequest.TextContent` is effectively required (non-nullable), so each `NotificationClient` sends a plaintext fallback derived from the HTML. No event bus — direct HTTP is the Phase 1 choice.
+
 **Schema:** `Notifications`, `NotificationTypes` (8 seeded), `NotificationTemplates` (with `Language` — i18n-ready), `UserNotificationPreferences` (per-channel opt-in). Migration: `InitialNotificationSchema`.
 
 ---
@@ -172,7 +175,7 @@ Create validates over HTTP (`GET /api/bookings/{id}/info`): booking exists + **C
 | 5 | Short-term booking + availability calendar | **Done** | Create (+capacity validation), date-range calendar, and the **full lifecycle** (confirm/reject/cancel/complete) all exist. |
 | 6 | JazzCash payment | **Not Started** | No gateway code; only a `BookingPayments` DB scaffold. |
 | 7 | Inquiry/messaging (long-term & sale) | **Done\*** | Conversations/messages/real-time/attachments, linked to listings/bookings. *Caveat: new-message notifications not wired.* |
-| 8 | Email + SMS notifications | **Partial** | Sending works (SendGrid/SMTP + Twilio) but isn't triggered by app events (no event/bus wiring). Push stubbed. |
+| 8 | Email + SMS notifications | **Done** | Sending (SendGrid/SMTP + Twilio) wired to **9 app events** (booking/auth/review) via direct HTTP, fire-and-forget background dispatch. Push still stubbed (no device-token store); OTP still on direct provider SDKs (tracked). |
 | 9 | Featured/boosted listings | **Done** | `IsFeatured`/`FeaturedUntil`, real featured query, Host/Admin toggle. (No paid-boost flow — as scoped.) |
 | 10 | Admin capabilities | **Partial** | Role system + Admin-gated `set-role` + gateway enforcement, but no admin *operations* endpoints (moderation, verification approval, all-bookings view). |
 
@@ -191,7 +194,8 @@ Create validates over HTTP (`GET /api/bookings/{id}/info`): booking exists + **C
 ## Recommended next priorities
 
 1. **JazzCash payment (#6)** — the only Not-Started Phase 1 item; fills the `BookingPayments` scaffold (initiate + webhook) and enables Refunded.
-2. **Wire notifications to events (#8)** — connect booking/auth events to NotificationService (direct HTTP now, bus later).
-3. **Admin operations (#10)** — moderation, verification approval, bookings overview on top of the role system.
-4. **Service-to-service auth** — the internal `[AllowAnonymous]` endpoints (`/price`, `/capacity`, `/owner`, `/info`, `/rating`, `/notifications/*`) need a service token or network restriction before production (today reachable by any authenticated user through the gateway's write routes). *(The `/jobs/*` triggers are already Admin-only.)*
-5. **Schema cleanup** — remove the redundant `Bookings.BookingStatusId` shadow FK; implement the FCM device-token store for push.
+2. **Admin operations (#10)** — moderation, verification approval, bookings overview on top of the role system.
+3. **Service-to-service auth** — the internal `[AllowAnonymous]` endpoints (`/price`, `/capacity`, `/owner`, `/info`, `/rating`, `/api/auth/users/{id}/contact`, `/notifications/*`) need a service token or network restriction before production (today reachable by any authenticated user through the gateway's write routes). *(The `/jobs/*` triggers are already Admin-only.)*
+4. **Schema cleanup** — remove the redundant `Bookings.BookingStatusId` shadow FK; implement the FCM device-token store for push.
+
+**Tracked (not urgent):** OTP phone/email still send via direct Twilio/SendGrid SDK calls in AuthService (`PhoneVerificationService` / `EmailService`), bypassing NotificationService — migrate to a `NotificationClient` call to unify with the other 9 event notifications. A real **message bus** would later replace the direct-HTTP + background-dispatch approach for all cross-service events.

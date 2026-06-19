@@ -1,6 +1,8 @@
+using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using WeStay.ReviewService.DTOs;
 using WeStay.ReviewService.Models;
 
@@ -17,17 +19,23 @@ namespace WeStay.ReviewService.Services
         private readonly HttpClient _httpClient;
         private readonly IConfiguration _configuration;
         private readonly ILogger<ReviewService> _logger;
+        private readonly NotificationClient _notifications;
+        private readonly IServiceScopeFactory _scopeFactory;
 
         public ReviewService(
             Data.ReviewDbContext context,
             HttpClient httpClient,
             IConfiguration configuration,
-            ILogger<ReviewService> logger)
+            ILogger<ReviewService> logger,
+            NotificationClient notifications,
+            IServiceScopeFactory scopeFactory)
         {
             _context = context;
             _httpClient = httpClient;
             _configuration = configuration;
             _logger = logger;
+            _notifications = notifications;
+            _scopeFactory = scopeFactory;
         }
 
         public async Task<Review> CreateReviewAsync(int reviewerId, CreateReviewRequest request)
@@ -73,6 +81,10 @@ namespace WeStay.ReviewService.Services
             await _context.SaveChangesAsync();
 
             await UpdateListingRatingCacheAsync(review.ListingId);
+
+            // Event: review posted → notify the listing's host (background dispatch so notification
+            // I/O adds no latency to, and can never fail, the review write).
+            RunNotificationInBackground(svc => svc.NotifyHostReviewPostedAsync(review));
 
             _logger.LogInformation("Created review {ReviewId} for booking {BookingId} on listing {ListingId}",
                 review.Id, review.BookingId, review.ListingId);
@@ -206,6 +218,99 @@ namespace WeStay.ReviewService.Services
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error updating listing rating cache for listing {ListingId}", listingId);
+            }
+        }
+
+        // ===== Notifications (Phase 1: direct HTTP to NotificationService via NotificationClient) =====
+        // Best-effort: failures are logged and swallowed so a notification problem never fails the
+        // review write. Dispatch is fire-and-forget on a background task with its own DI scope, so
+        // notification I/O adds no latency to the review write. An event bus would replace this later.
+
+        // Runs notification work on a background task in a fresh scope (the request scope, with its
+        // scoped HttpClient/DbContext, may be disposed by the time this runs).
+        private void RunNotificationInBackground(Func<ReviewService, Task> work)
+        {
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    using var scope = _scopeFactory.CreateScope();
+                    var svc = (ReviewService)scope.ServiceProvider.GetRequiredService<IReviewService>();
+                    await work(svc);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Background notification dispatch failed");
+                }
+            });
+        }
+
+        private record UserContact(int Id, string? Email, string? PhoneNumber, string? FirstName, string? LastName);
+
+        private async Task NotifyHostReviewPostedAsync(Review review)
+        {
+            try
+            {
+                var hostId = await GetListingOwnerAsync(review.ListingId);
+                if (hostId == null) { _logger.LogWarning("Review {Id}: host unresolved; skipping review-notification.", review.Id); return; }
+
+                var host = await GetUserContactAsync(hostId.Value);
+                if (host == null) return;
+
+                var msg = $"A guest left a {review.Rating}-star review on your listing (#{review.ListingId}).";
+                await _notifications.SendEmailAsync(host.Email, "New review on your listing", $"<p>{msg}</p>");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed host review-notification for review {Id}", review.Id);
+            }
+        }
+
+        private async Task<int?> GetListingOwnerAsync(int listingId)
+        {
+            try
+            {
+                var listingServiceUrl = _configuration["Services:ListingService"];
+                var response = await _httpClient.GetAsync($"{listingServiceUrl}/api/listings/{listingId}/owner");
+                if (response.IsSuccessStatusCode && int.TryParse(await response.Content.ReadAsStringAsync(), out var ownerId))
+                {
+                    return ownerId;
+                }
+
+                _logger.LogWarning("ListingService returned {Status} for owner of listing {ListingId}", (int)response.StatusCode, listingId);
+                return null;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error fetching owner of listing {ListingId}", listingId);
+                return null;
+            }
+        }
+
+        private async Task<UserContact?> GetUserContactAsync(int userId)
+        {
+            try
+            {
+                var authUrl = _configuration["Services:AuthService"];
+                if (string.IsNullOrEmpty(authUrl))
+                {
+                    _logger.LogWarning("Services:AuthService is not configured; cannot resolve contact for user {UserId}", userId);
+                    return null;
+                }
+
+                var response = await _httpClient.GetAsync($"{authUrl}/api/auth/users/{userId}/contact");
+                if (response.IsSuccessStatusCode)
+                {
+                    return await response.Content.ReadFromJsonAsync<UserContact>();
+                }
+
+                _logger.LogWarning("AuthService returned {Status} resolving contact for user {UserId}", (int)response.StatusCode, userId);
+                return null;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error resolving contact for user {UserId}", userId);
+                return null;
             }
         }
     }

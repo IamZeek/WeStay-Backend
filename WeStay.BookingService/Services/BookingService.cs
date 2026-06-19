@@ -1,4 +1,6 @@
-﻿using WeStay.BookingService.Models;
+﻿using System.Net.Http.Json;
+using Microsoft.Extensions.DependencyInjection;
+using WeStay.BookingService.Models;
 using WeStay.BookingService.Repositories.Interfaces;
 using WeStay.BookingService.Services.Interfaces;
 using WeStay.BookingService.DTOs;
@@ -15,6 +17,8 @@ namespace WeStay.BookingService.Services
         private readonly ILogger<BookingService> _logger;
         private readonly HttpClient _httpClient;
         private readonly IConfiguration _configuration;
+        private readonly NotificationClient _notifications;
+        private readonly IServiceScopeFactory _scopeFactory;
 
         public BookingService(
             IBookingRepository bookingRepository,
@@ -23,7 +27,9 @@ namespace WeStay.BookingService.Services
             IAvailabilityService availabilityService,
             ILogger<BookingService> logger,
             HttpClient httpClient,
-            IConfiguration configuration)
+            IConfiguration configuration,
+            NotificationClient notifications,
+            IServiceScopeFactory scopeFactory)
         {
             _bookingRepository = bookingRepository;
             _statusRepository = statusRepository;
@@ -32,6 +38,8 @@ namespace WeStay.BookingService.Services
             _logger = logger;
             _httpClient = httpClient;
             _configuration = configuration;
+            _notifications = notifications;
+            _scopeFactory = scopeFactory;
         }
 
         public async Task<Booking> CreateBookingAsync(Booking booking, List<BookingGuest> guests)
@@ -83,6 +91,10 @@ namespace WeStay.BookingService.Services
 
             _logger.LogInformation("Booking created with ID: {BookingId}, Code: {BookingCode}",
                 createdBooking.Id, createdBooking.BookingCode);
+
+            // Event: booking created (Pending) → notify the host. Dispatched to the background so a
+            // slow/unavailable NotificationService never adds latency to (or fails) the create.
+            RunNotificationInBackground(svc => svc.NotifyHostBookingCreatedAsync(createdBooking, guests));
 
             return createdBooking;
         }
@@ -143,7 +155,12 @@ namespace WeStay.BookingService.Services
             await _bookingRepository.UpdateBookingAsync(booking);
 
             // Re-fetch so the returned booking carries the fresh Status navigation.
-            return await _bookingRepository.GetBookingByIdAsync(bookingId);
+            var confirmed = await _bookingRepository.GetBookingByIdAsync(bookingId);
+
+            // Event: booking confirmed → notify the guest (background dispatch).
+            RunNotificationInBackground(svc => svc.NotifyGuestBookingConfirmedAsync(confirmed));
+
+            return confirmed;
         }
 
         public async Task<Booking> RejectBookingAsync(int bookingId, int requestingUserId, bool isAdmin, string reason)
@@ -162,7 +179,12 @@ namespace WeStay.BookingService.Services
             booking.CancelledAt = DateTime.UtcNow;
             await _bookingRepository.UpdateBookingAsync(booking);
 
-            return await _bookingRepository.GetBookingByIdAsync(bookingId);
+            var rejected = await _bookingRepository.GetBookingByIdAsync(bookingId);
+
+            // Event: booking rejected → notify the guest (background dispatch).
+            RunNotificationInBackground(svc => svc.NotifyGuestBookingRejectedAsync(rejected));
+
+            return rejected;
         }
 
         public async Task<Booking> CompleteBookingAsync(int bookingId, int requestingUserId, bool isAdmin)
@@ -276,6 +298,9 @@ namespace WeStay.BookingService.Services
                     _logger.LogInformation(
                         "Auto-cancelled booking {BookingId} (listing {ListingId}, created {CreatedAt:u})",
                         booking.Id, booking.ListingId, booking.CreatedAt);
+
+                    // Event: booking auto-cancelled (expiry) → notify the guest (background dispatch).
+                    RunNotificationInBackground(svc => svc.NotifyGuestBookingExpiredAsync(booking));
                 }
                 catch (Exception ex)
                 {
@@ -375,6 +400,174 @@ namespace WeStay.BookingService.Services
             {
                 _logger.LogError(ex, "Error getting listing owner for ID: {ListingId}", listingId);
                 return null;
+            }
+        }
+
+        // ===== Notifications (Phase 1: direct HTTP to NotificationService via NotificationClient) =====
+        // Every method here is best-effort and swallows all failures — a notification problem must
+        // never fail the booking operation that triggered it. Recipient contact (email/phone) is
+        // resolved from AuthService; notification *content* stays within booking-local data (codes,
+        // ids, dates) rather than enriching across services, per the Phase 1 constraint.
+        //
+        // Dispatch is fire-and-forget on a background task with its OWN DI scope, so notification I/O
+        // (which can be slow or unavailable) is fully decoupled from the request that triggered it —
+        // it adds zero latency and cannot fail the operation. An event bus would replace this later.
+
+        // Runs notification work on a background task in a fresh scope (the request scope, with its
+        // scoped HttpClient/DbContext, may be disposed by the time this runs). Resolves a fresh
+        // BookingService from the new scope so the work uses non-disposed dependencies.
+        private void RunNotificationInBackground(Func<BookingService, Task> work)
+        {
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    using var scope = _scopeFactory.CreateScope();
+                    var svc = (BookingService)scope.ServiceProvider.GetRequiredService<IBookingService>();
+                    await work(svc);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Background notification dispatch failed");
+                }
+            });
+        }
+
+        private record UserContact(int Id, string? Email, string? PhoneNumber, string? FirstName, string? LastName);
+
+        private async Task<UserContact?> GetUserContactAsync(int userId)
+        {
+            try
+            {
+                var authUrl = _configuration["Services:AuthService"];
+                if (string.IsNullOrEmpty(authUrl))
+                {
+                    _logger.LogWarning("Services:AuthService is not configured; cannot resolve contact for user {UserId}", userId);
+                    return null;
+                }
+
+                var response = await _httpClient.GetAsync($"{authUrl}/api/auth/users/{userId}/contact");
+                if (response.IsSuccessStatusCode)
+                {
+                    return await response.Content.ReadFromJsonAsync<UserContact>();
+                }
+
+                _logger.LogWarning("AuthService returned {Status} resolving contact for user {UserId}", (int)response.StatusCode, userId);
+                return null;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error resolving contact for user {UserId}", userId);
+                return null;
+            }
+        }
+
+        private static string DateRange(Booking booking) =>
+            $"{booking.CheckInDate:yyyy-MM-dd} to {booking.CheckOutDate:yyyy-MM-dd}";
+
+        private async Task NotifyHostBookingCreatedAsync(Booking booking, List<BookingGuest> guests)
+        {
+            try
+            {
+                var hostId = await GetListingHostIdAsync(booking.ListingId);
+                if (hostId == null) { _logger.LogWarning("Booking {Id}: host unresolved; skipping created-notification.", booking.Id); return; }
+
+                var host = await GetUserContactAsync(hostId.Value);
+                if (host == null) return;
+
+                var lead = guests?.FirstOrDefault();
+                var guestName = lead != null ? $"{lead.FirstName} {lead.LastName}".Trim() : "a guest";
+                var msg = $"You have a new booking request ({booking.BookingCode}) for listing #{booking.ListingId} from {guestName} for {DateRange(booking)}.";
+
+                await _notifications.SendSmsAsync(host.PhoneNumber, msg);
+                await _notifications.SendEmailAsync(host.Email, "New booking request", $"<p>{msg}</p>");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed host created-notification for booking {Id}", booking.Id);
+            }
+        }
+
+        private async Task NotifyGuestBookingConfirmedAsync(Booking booking)
+        {
+            try
+            {
+                var guest = await GetUserContactAsync(booking.UserId);
+                if (guest == null) return;
+
+                var msg = $"Your booking is confirmed for {DateRange(booking)}. Booking code: {booking.BookingCode}.";
+                await _notifications.SendSmsAsync(guest.PhoneNumber, msg);
+                await _notifications.SendEmailAsync(guest.Email, "Your booking is confirmed", $"<p>{msg}</p>");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed guest confirmed-notification for booking {Id}", booking.Id);
+            }
+        }
+
+        private async Task NotifyGuestBookingRejectedAsync(Booking booking)
+        {
+            try
+            {
+                var guest = await GetUserContactAsync(booking.UserId);
+                if (guest == null) return;
+
+                var msg = $"Your booking request {booking.BookingCode} for listing #{booking.ListingId} was not approved.";
+                await _notifications.SendEmailAsync(guest.Email, "Booking request not approved", $"<p>{msg}</p>");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed guest rejected-notification for booking {Id}", booking.Id);
+            }
+        }
+
+        private async Task NotifyGuestBookingExpiredAsync(Booking booking)
+        {
+            try
+            {
+                var guest = await GetUserContactAsync(booking.UserId);
+                if (guest == null) return;
+
+                var msg = $"Your booking request {booking.BookingCode} expired because the host did not confirm in time.";
+                await _notifications.SendEmailAsync(guest.Email, "Booking request expired", $"<p>{msg}</p>");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed guest expired-notification for booking {Id}", booking.Id);
+            }
+        }
+
+        // Event: booking cancelled → notify whoever did NOT cancel (an Admin cancel notifies both).
+        // Public entry point (called by the controller); dispatches to the background and returns
+        // immediately so the cancel response is never delayed by notification I/O.
+        public Task NotifyBookingCancelledAsync(Booking booking, int cancellingUserId, bool cancellerIsAdmin)
+        {
+            RunNotificationInBackground(svc => svc.DoNotifyBookingCancelledAsync(booking, cancellingUserId, cancellerIsAdmin));
+            return Task.CompletedTask;
+        }
+
+        private async Task DoNotifyBookingCancelledAsync(Booking booking, int cancellingUserId, bool cancellerIsAdmin)
+        {
+            try
+            {
+                var hostId = await GetListingHostIdAsync(booking.ListingId);
+                var msg = $"Booking {booking.BookingCode} for listing #{booking.ListingId} ({DateRange(booking)}) has been cancelled.";
+
+                if (cancellerIsAdmin || booking.UserId != cancellingUserId)
+                {
+                    var guest = await GetUserContactAsync(booking.UserId);
+                    if (guest != null) await _notifications.SendEmailAsync(guest.Email, "Booking cancelled", $"<p>{msg}</p>");
+                }
+
+                if (hostId != null && (cancellerIsAdmin || hostId.Value != cancellingUserId))
+                {
+                    var host = await GetUserContactAsync(hostId.Value);
+                    if (host != null) await _notifications.SendEmailAsync(host.Email, "Booking cancelled", $"<p>{msg}</p>");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed cancellation-notifications for booking {Id}", booking.Id);
             }
         }
     }

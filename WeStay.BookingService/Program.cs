@@ -52,6 +52,9 @@ builder.Services.AddScoped<IBookingPaymentRepository, BookingPaymentRepository>(
 // Register services
 builder.Services.AddScoped<IBookingService,BookingService>();
 builder.Services.AddScoped<IAvailabilityService, AvailabilityService>();
+// Delegates Email/SMS for booking events to NotificationService over HTTP (best-effort).
+// Short timeout so a slow/unreachable NotificationService can never stall a booking operation.
+builder.Services.AddHttpClient<NotificationClient>(c => c.Timeout = TimeSpan.FromSeconds(5));
 
 // Background jobs for automatic booking state transitions (intervals/window in the "Booking" config).
 builder.Services.AddHostedService<BookingCompletionService>();

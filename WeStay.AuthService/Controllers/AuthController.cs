@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.DependencyInjection;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using WeStay.AuthService.Models;
@@ -29,6 +30,7 @@ namespace WeStay.AuthService.Controllers
         private readonly IPhoneVerificationService _phoneVerificationService;
         private readonly IEmailService _emailService;
         private readonly IMemoryCache _cache;
+        private readonly IServiceScopeFactory _scopeFactory;
 
         public AuthController(
             IConfiguration configuration,
@@ -38,9 +40,10 @@ namespace WeStay.AuthService.Controllers
             IAuthService authService,
             IUserService userService,
             IVerificationService verificationService,
-            IPhoneVerificationService phoneVerificationService, 
+            IPhoneVerificationService phoneVerificationService,
             IEmailService emailService,
-            IMemoryCache cache)
+            IMemoryCache cache,
+            IServiceScopeFactory scopeFactory)
         {
             _configuration = configuration;
             _logger = logger;
@@ -52,6 +55,7 @@ namespace WeStay.AuthService.Controllers
             _phoneVerificationService = phoneVerificationService;
             _emailService = emailService;
             _cache = cache;
+            _scopeFactory = scopeFactory;
         }
 
         [HttpPost("register")]
@@ -73,6 +77,28 @@ namespace WeStay.AuthService.Controllers
                     request.LastName,
                     request.DateOfBirth,
                     request.PhoneNumber);
+
+                // Event: registration → welcome email. Dispatched fire-and-forget on a background task
+                // with its own DI scope, so notification I/O adds no latency to (and can never fail)
+                // registration. An event bus would replace this direct call in a later phase.
+                var welcomeEmail = user.Email;
+                var welcomeName = user.FirstName;
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        using var scope = _scopeFactory.CreateScope();
+                        var notifications = scope.ServiceProvider.GetRequiredService<NotificationClient>();
+                        await notifications.SendEmailAsync(
+                            welcomeEmail,
+                            "Welcome to WeStay",
+                            $"<p>Welcome to WeStay, {welcomeName}!</p><p>Your account is ready.</p>");
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Background welcome-email dispatch failed for {Email}", welcomeEmail);
+                    }
+                });
 
                 // Generate JWT token
                 var token = _jwtTokenGenerator.GenerateToken(user);
@@ -400,6 +426,33 @@ namespace WeStay.AuthService.Controllers
             {
                 _logger.LogError(ex, "Error setting role for user {UserId}", id);
                 return StatusCode(500, new { Message = "An error occurred while setting the user role" });
+            }
+        }
+
+        /// <summary>
+        /// Internal service-to-service: minimal contact details for a user, used by other services
+        /// (Booking, Review) to address notifications. [AllowAnonymous] like the other internal
+        /// service-to-service endpoints — it relies on network trust (needs a service token before
+        /// production); the gateway keeps /api/auth/users/* Admin-gated for external callers.
+        /// </summary>
+        [HttpGet("users/{id}/contact")]
+        [AllowAnonymous]
+        public async Task<IActionResult> GetUserContact(int id)
+        {
+            try
+            {
+                var user = await _userService.GetUserByIdAsync(id);
+                if (user == null)
+                {
+                    return NotFound(new { Message = "User not found" });
+                }
+
+                return Ok(new { user.Id, user.Email, user.PhoneNumber, user.FirstName, user.LastName });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error fetching contact for user {UserId}", id);
+                return StatusCode(500, new { Message = "An error occurred while fetching user contact" });
             }
         }
 

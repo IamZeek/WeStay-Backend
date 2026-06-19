@@ -28,6 +28,10 @@ builder.Services.AddScoped<IVerificationService, VerificationService>();
 builder.Services.AddScoped<IPhoneVerificationService, PhoneVerificationService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 
+// Thin client that delegates event-driven Email/SMS to NotificationService over HTTP.
+// Short timeout so a slow/unreachable NotificationService can never stall registration.
+builder.Services.AddHttpClient<NotificationClient>(c => c.Timeout = TimeSpan.FromSeconds(5));
+
 
 // Configure JWT Authentication
 var jwtKey = builder.Configuration["Jwt:Key"];

@@ -17,6 +17,9 @@ builder.Services.AddDbContext<ReviewDbContext>(options =>
 
 builder.Services.AddScoped<IReviewService, ReviewService>();
 builder.Services.AddHttpClient();
+// Delegates the "review posted" email to NotificationService over HTTP (best-effort).
+// Short timeout so a slow/unreachable NotificationService can never stall a review write.
+builder.Services.AddHttpClient<NotificationClient>(c => c.Timeout = TimeSpan.FromSeconds(5));
 
 // JWT Authentication (unified with the rest of WeStay).
 var jwtKey = builder.Configuration["Jwt:Key"];

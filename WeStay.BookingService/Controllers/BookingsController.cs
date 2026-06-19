@@ -250,6 +250,9 @@ namespace WeStay.BookingService.Controllers
 
                 var cancelledBooking = await _bookingService.CancelBookingAsync(id, request.Reason);
 
+                // Event: booking cancelled → notify the other party. Best-effort, never fails the cancel.
+                await _bookingService.NotifyBookingCancelledAsync(cancelledBooking, userId, User.IsInRole("Admin"));
+
                 return Ok(new
                 {
                     Message = "Booking cancelled successfully",

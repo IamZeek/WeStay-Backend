@@ -46,16 +46,24 @@ Build all: `dotnet build WeStay.sln`.
 
 ## Phase 1 status (summary)
 
-Done: owner onboarding + listing taxonomy, photo upload (Azure Blob), search + filters, map data, booking + availability calendar + full lifecycle, featured listings. Partial: email/SMS (sending works but not event-triggered), admin (role system exists, no admin ops endpoints). **Not started: JazzCash payment.** Beyond Phase 1, reviews & ratings are built.
+Done: owner onboarding + listing taxonomy, photo upload (Azure Blob), search + filters, map data, booking + availability calendar + full lifecycle, featured listings, **event-triggered email/SMS notifications** (9 events — see "Event-driven notifications"). Partial: admin (role system exists, no admin ops endpoints). **Not started: JazzCash payment.** Beyond Phase 1, reviews & ratings are built.
 
 ## Explicitly NOT built yet
 
 - **JazzCash / any payment gateway** — `BookingPayments` is a DB scaffold only; `Refunded` status is unreachable.
 - **Frontend** — backend only; no web/mobile client.
 - **Admin moderation endpoints** — no user/listing moderation, verification-approval endpoint, or all-bookings view (only `set-role` exists).
-- **Service-to-service auth tokens** — internal `[AllowAnonymous]` endpoints (`/price`, `/capacity`, `/owner`, `/info`, `/rating`, `/notifications/*`) rely on network trust; they need a service token / network restriction before production.
-- **Message bus / event-driven notifications** — cross-service is direct HTTP; notifications aren't fired on booking/auth events.
+- **Service-to-service auth tokens** — internal `[AllowAnonymous]` endpoints (`/price`, `/capacity`, `/owner`, `/info`, `/rating`, `/api/auth/users/{id}/contact`, `/notifications/*`) rely on network trust; they need a service token / network restriction before production.
+- **Message bus** — no broker; cross-service calls *and* event notifications are direct HTTP. Notifications **are** now fired on booking/auth/review events (see below); a bus would replace the direct-HTTP + background-dispatch approach later.
 - **Push notifications** — FCM send-code exists but there's no device-token store.
+
+## Event-driven notifications
+
+- **9 business events** fire Email/SMS via NotificationService over direct HTTP. Each producing service (Booking/Auth/Review) has its own `NotificationClient` (mirrors `MessagingService/Services/NotificationServices.cs`), reading `Services:NotificationService`.
+- **Fire-and-forget:** every send is dispatched on a background `Task` with its **own DI scope** (`IServiceScopeFactory`), so a slow/unavailable NotificationService adds **zero latency** to — and can never fail — the triggering operation. (An event bus would replace this later.)
+- Events: booking created→host (SMS+Email), confirmed→guest (SMS+Email), rejected→guest, cancelled→the other party, auto-cancelled→guest; registration→welcome email; review posted→host.
+- Recipient contact (email/phone) is resolved via internal `GET /api/auth/users/{id}/contact`; notification **content** stays in-service (booking code / ids / dates), not cross-service enrichment, so a missing listing name can't cause a failure.
+- **Known inconsistency (tracked):** OTP phone & email still send via **direct Twilio/SendGrid SDK calls inside AuthService** (`PhoneVerificationService` / `EmailService`), **not** through NotificationService. Functional, but bypasses the unified path — candidate to migrate to a `NotificationClient` call later.
 
 ## Known cleanups
 
