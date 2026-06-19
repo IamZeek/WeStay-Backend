@@ -188,6 +188,14 @@ namespace WeStay.ListingService.Services
                 return false;
             }
 
+            // A soft-delete flips status to Inactive, which would clear an admin Banned state — block it,
+            // same as ChangeListingStatusAsync, so the owner can't delete their way around a ban.
+            if (listing.Status == ListingStatus.Banned)
+            {
+                throw new InvalidOperationException(
+                    "This listing was deactivated by an administrator and can only be reactivated by an admin.");
+            }
+
             // Soft delete by changing status
             listing.Status = ListingStatus.Inactive;
             listing.UpdatedAt = DateTime.UtcNow;
@@ -236,6 +244,14 @@ namespace WeStay.ListingService.Services
                 return false;
             }
 
+            // An admin ban (Banned) can only be lifted by an admin (AdminSetStatusAsync). The owner
+            // must not be able to change a Banned listing's status — reject loudly, never silent no-op.
+            if (listing.Status == ListingStatus.Banned)
+            {
+                throw new InvalidOperationException(
+                    "This listing was deactivated by an administrator and can only be reactivated by an admin.");
+            }
+
             listing.Status = status;
             listing.UpdatedAt = DateTime.UtcNow;
 
@@ -243,6 +259,47 @@ namespace WeStay.ListingService.Services
 
             _logger.LogInformation("Changed status of listing {ListingId} to {Status} for host {HostId}",
                 listingId, status, hostId);
+
+            return true;
+        }
+
+        // Admin oversight: ALL listings regardless of status or owner (unlike search/GetById which are
+        // Active-only and GetListingsByHostId which is owner-scoped). Owner is the HostId on each row.
+        public async Task<(IEnumerable<Listing> listings, int totalCount)> GetAllListingsAsync(int page, int pageSize, ListingStatus? status)
+        {
+            var query = _context.Listings.Include(l => l.Images).AsQueryable();
+            if (status.HasValue)
+            {
+                query = query.Where(l => l.Status == status.Value);
+            }
+
+            var totalCount = await query.CountAsync();
+            var listings = await query
+                .OrderByDescending(l => l.CreatedAt)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+
+            return (listings, totalCount);
+        }
+
+        // Admin override: set any listing's status with NO ownership check (distinct from the
+        // owner-initiated ChangeListingStatusAsync). The optional reason is logged (no schema field
+        // for it yet — see PROJECT_STATUS.md if persistence is wanted).
+        public async Task<bool> AdminSetStatusAsync(int listingId, ListingStatus status, string? reason)
+        {
+            var listing = await _context.Listings.FirstOrDefaultAsync(l => l.Id == listingId);
+            if (listing == null)
+            {
+                return false;
+            }
+
+            listing.Status = status;
+            listing.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            _logger.LogInformation("ADMIN set status of listing {ListingId} to {Status}. Reason: {Reason}",
+                listingId, status, string.IsNullOrWhiteSpace(reason) ? "(none)" : reason);
 
             return true;
         }

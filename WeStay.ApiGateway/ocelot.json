@@ -25,6 +25,18 @@
       "RouteClaimsRequirement": { "role": "Admin" }
     },
 
+    // Admin moderation surface (KYC verifications): same Admin gateway-gating as /users/* above.
+    // AuthService also enforces [Authorize(Roles="Admin")] as the authoritative backstop.
+    {
+      "DownstreamPathTemplate": "/api/auth/admin/{everything}",
+      "DownstreamScheme": "https",
+      "DownstreamHostAndPorts": [ { "Host": "localhost", "Port": 7019 } ],
+      "UpstreamPathTemplate": "/api/auth/admin/{everything}",
+      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE" ],
+      "AuthenticationOptions": { "AuthenticationProviderKey": "Bearer", "AllowedScopes": [] },
+      "RouteClaimsRequirement": { "role": "Admin" }
+    },
+
     // No gateway-level auth: register/login/external-login are anonymous; AuthService
     // enforces [Authorize] on profile/change-password/become-host/OTP itself.
     {
@@ -36,6 +48,9 @@
     },
 
     // ---- ListingService (7002) ----
+    // Admin moderation endpoints (GET /api/listings/admin/all, POST /api/listings/{id}/admin/
+    // deactivate|reactivate) ride these existing wildcard routes (GET open / writes Bearer) and are
+    // gated at the service via [Authorize(Roles="Admin")] — same approach as BookingService /jobs/*.
     // Public reads: GetListing and the /price lookup are [AllowAnonymous].
     {
       "DownstreamPathTemplate": "/api/listings/{everything}",
@@ -63,6 +78,8 @@
     },
 
     // ---- BookingService (7292) ----
+    // Admin oversight (GET /api/bookings/admin/all) and the /jobs/* triggers ride these existing
+    // wildcard routes and are gated at the service via [Authorize(Roles="Admin")].
     // Availability reads are [AllowAnonymous].
     {
       "DownstreamPathTemplate": "/api/bookings/{everything}",

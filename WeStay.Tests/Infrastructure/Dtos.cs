@@ -44,4 +44,15 @@ namespace WeStay.Tests.Infrastructure
 
     // Subset of BookingService's GET /api/bookings/{id}/info
     public record BookingStatusInfo(int BookingId, string Status);
+
+    // ---- Admin moderation responses (subsets) ----
+    public record AdminVerificationListItem(int Id, int UserId, string? UserEmail, string Status);
+    public record AdminVerificationListResponse(string Status, int TotalCount, List<AdminVerificationListItem> Items);
+    public record AdminVerificationDetail(int Id, string Status, string? RejectionReason);
+
+    public record AdminListingItem(int Id, int HostId, string Status);
+    public record AdminListingsResponse(int TotalCount, List<AdminListingItem> Items);
+
+    public record AdminBookingItem(int Id, int UserId, int ListingId, string Status);
+    public record AdminBookingsResponse(int TotalCount, List<AdminBookingItem> Items);
 }

@@ -50,7 +50,9 @@ namespace WeStay.AuthService.Models
 
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
+        // Maps to a NOT NULL column; default to empty so inserts/updates that don't set a reason
+        // (creation, approval) don't fail with a NULL-insert error.
         [MaxLength(500)]
-        public string RejectionReason { get; set; }
+        public string RejectionReason { get; set; } = string.Empty;
     }
 }

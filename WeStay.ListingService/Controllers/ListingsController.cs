@@ -291,6 +291,11 @@ namespace WeStay.ListingService.Controllers
 
                 return Ok(new { Message = "Listing deleted successfully" });
             }
+            catch (InvalidOperationException ex)
+            {
+                // Listing is admin-Banned — the owner cannot delete/soft-deactivate it.
+                return StatusCode(403, new { Message = ex.Message });
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error deleting listing {ListingId} for user {UserId}", id, GetUserId());
@@ -315,6 +320,11 @@ namespace WeStay.ListingService.Controllers
                 }
 
                 return Ok(new { Message = $"Listing status changed to {request.Status}" });
+            }
+            catch (InvalidOperationException ex)
+            {
+                // Listing is admin-Banned — the owner cannot change its status (only Admin can reactivate).
+                return StatusCode(403, new { Message = ex.Message });
             }
             catch (Exception ex)
             {
@@ -358,6 +368,84 @@ namespace WeStay.ListingService.Controllers
             }
         }
 
+        // ===== Admin moderation (Admin-only; gateway forwards via the existing /api/listings/* routes,
+        // the service enforces the role — same pattern as BookingService's /jobs/* admin triggers). =====
+
+        /// <summary>
+        /// Admin oversight: paginated list of ALL listings regardless of status or owner, optionally
+        /// filtered by status. Each item carries its owner (HostId).
+        /// </summary>
+        [HttpGet("admin/all")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> AdminGetAllListings([FromQuery] ListingStatus? status, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
+        {
+            try
+            {
+                if (page < 1) page = 1;
+                if (pageSize < 1 || pageSize > 100) pageSize = 20;
+
+                var (listings, totalCount) = await _listingService.GetAllListingsAsync(page, pageSize, status);
+                var items = listings.Select(l => new
+                {
+                    l.Id,
+                    l.HostId,
+                    l.Title,
+                    l.City,
+                    l.Country,
+                    Status = l.Status.ToString(),
+                    l.PricePerNight,
+                    l.IsFeatured,
+                    l.CreatedAt
+                });
+
+                return Ok(new { Page = page, PageSize = pageSize, TotalCount = totalCount, Items = items });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error listing all listings (admin)");
+                return StatusCode(500, new { Message = "An error occurred while listing listings" });
+            }
+        }
+
+        /// <summary>
+        /// Admin force-deactivate (e.g. policy violation) — sets status to Banned with NO ownership
+        /// check. Distinct from the owner-initiated status change. Optional reason (logged).
+        /// </summary>
+        [HttpPost("{id}/admin/deactivate")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> AdminDeactivate(int id, [FromBody] AdminListingActionRequest? request)
+        {
+            try
+            {
+                var ok = await _listingService.AdminSetStatusAsync(id, ListingStatus.Banned, request?.Reason);
+                if (!ok) return NotFound(new { Message = "Listing not found" });
+                return Ok(new { Message = "Listing deactivated by admin", Id = id, Status = ListingStatus.Banned.ToString() });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error admin-deactivating listing {ListingId}", id);
+                return StatusCode(500, new { Message = "An error occurred while deactivating the listing" });
+            }
+        }
+
+        /// <summary>Admin reactivate — reverse of the force-deactivate; sets status back to Active.</summary>
+        [HttpPost("{id}/admin/reactivate")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> AdminReactivate(int id)
+        {
+            try
+            {
+                var ok = await _listingService.AdminSetStatusAsync(id, ListingStatus.Active, null);
+                if (!ok) return NotFound(new { Message = "Listing not found" });
+                return Ok(new { Message = "Listing reactivated by admin", Id = id, Status = ListingStatus.Active.ToString() });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error admin-reactivating listing {ListingId}", id);
+                return StatusCode(500, new { Message = "An error occurred while reactivating the listing" });
+            }
+        }
+
         private int GetUserId()
         {
             return int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
@@ -367,6 +455,11 @@ namespace WeStay.ListingService.Controllers
     public class ChangeStatusRequest
     {
         public ListingStatus Status { get; set; }
+    }
+
+    public class AdminListingActionRequest
+    {
+        public string? Reason { get; set; }
     }
 
     public class SetFeaturedRequest

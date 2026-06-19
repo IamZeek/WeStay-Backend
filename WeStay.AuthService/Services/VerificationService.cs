@@ -79,17 +79,17 @@ namespace WeStay.AuthService.Services
             if (status == VerificationStatus.Approved)
             {
                 verification.VerifiedAt = DateTime.UtcNow;
-                verification.RejectionReason = null;
+                verification.RejectionReason = string.Empty; // NOT NULL column
             }
             else if (status == VerificationStatus.Rejected)
             {
                 verification.VerifiedAt = DateTime.UtcNow;
-                verification.RejectionReason = rejectionReason;
+                verification.RejectionReason = rejectionReason ?? string.Empty;
             }
             else
             {
                 verification.VerifiedAt = null;
-                verification.RejectionReason = null;
+                verification.RejectionReason = string.Empty; // NOT NULL column
             }
 
             _context.Verifications.Update(verification);

@@ -139,6 +139,30 @@ namespace WeStay.BookingService.Repositories
                 .ToListAsync();
         }
 
+        // Admin oversight: ALL bookings across every user/listing, optionally filtered by status
+        // (distinct from GetBookingsByUserIdAsync which is scoped to one user).
+        public async Task<(IEnumerable<Booking> bookings, int totalCount)> GetAllBookingsAsync(int page, int pageSize, int? statusId)
+        {
+            var query = _context.Bookings
+                .Include(b => b.Status)
+                .Include(b => b.Guests)
+                .AsQueryable();
+
+            if (statusId.HasValue)
+            {
+                query = query.Where(b => b.StatusId == statusId.Value);
+            }
+
+            var totalCount = await query.CountAsync();
+            var bookings = await query
+                .OrderByDescending(b => b.CreatedAt)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+
+            return (bookings, totalCount);
+        }
+
         private string GenerateBookingCode()
         {
             const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";

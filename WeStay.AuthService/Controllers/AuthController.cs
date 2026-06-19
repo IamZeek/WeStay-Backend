@@ -459,7 +459,7 @@ namespace WeStay.AuthService.Controllers
         // Add this method to the AuthController class
         [HttpPut("verification-update")]
         [Authorize]
-        public async Task<IActionResult> VerificationUpdate([FromBody] Verification request)
+        public async Task<IActionResult> VerificationUpdate([FromBody] VerificationUpdateRequest request)
         {
             try
             {
@@ -508,7 +508,7 @@ namespace WeStay.AuthService.Controllers
                     verification.Status = VerificationStatus.Pending; // Reset to pending when updating
                     verification.UpdatedAt = DateTime.UtcNow;
                     verification.VerifiedAt = null; // Reset verification timestamp
-                    verification.RejectionReason = null; // Clear previous rejection reason
+                    verification.RejectionReason = string.Empty; // Clear previous reason (NOT NULL column)
 
                     await _verificationService.UpdateVerificationAsync(verification);
 

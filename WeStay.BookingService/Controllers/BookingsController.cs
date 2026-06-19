@@ -450,6 +450,31 @@ namespace WeStay.BookingService.Controllers
             }
         }
 
+        /// <summary>
+        /// Admin oversight: paginated list of ALL bookings across every user/listing, optionally
+        /// filtered by status. Distinct from GET /api/bookings/user/{userId} (single-user). Admin only.
+        /// </summary>
+        [HttpGet("admin/all")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> AdminGetAllBookings([FromQuery] string? status, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
+        {
+            try
+            {
+                if (page < 1) page = 1;
+                if (pageSize < 1 || pageSize > 100) pageSize = 20;
+
+                var (bookings, totalCount) = await _bookingService.GetAllBookingsAsync(page, pageSize, status);
+                var items = bookings.Select(MapToBookingResponse).ToList();
+
+                return Ok(new { Page = page, PageSize = pageSize, TotalCount = totalCount, Items = items });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error listing all bookings (admin)");
+                return StatusCode(500, new { Message = "An error occurred while listing bookings" });
+            }
+        }
+
         private BookingResponse MapToBookingResponse(Booking booking)
         {
             return new BookingResponse

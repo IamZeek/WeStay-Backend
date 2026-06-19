@@ -34,6 +34,12 @@ namespace WeStay.Tests.Infrastructure
         public Task<HttpResponseMessage> PutAsync(string path, object? body = null, string? token = null)
             => Send(HttpMethod.Put, path, body, token);
 
+        public Task<HttpResponseMessage> PatchAsync(string path, object? body = null, string? token = null)
+            => Send(HttpMethod.Patch, path, body, token);
+
+        public Task<HttpResponseMessage> DeleteAsync(string path, string? token = null)
+            => Send(HttpMethod.Delete, path, null, token);
+
         private Task<HttpResponseMessage> Send(HttpMethod method, string path, object? body, string? token)
         {
             var request = new HttpRequestMessage(method, path);

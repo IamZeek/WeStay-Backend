@@ -15,5 +15,6 @@ namespace WeStay.BookingService.Repositories.Interfaces
         Task<bool> IsListingAvailableAsync(int listingId, DateTime checkInDate, DateTime checkOutDate, int? excludeBookingId = null);
         Task<List<int>> GetBookingIdsByStatusPastCheckoutAsync(int statusId, DateTime asOfUtc);
         Task<List<int>> GetBookingIdsByStatusCreatedBeforeAsync(int statusId, DateTime cutoffUtc);
+        Task<(IEnumerable<Booking> bookings, int totalCount)> GetAllBookingsAsync(int page, int pageSize, int? statusId);
     }
 }

@@ -51,5 +51,13 @@ namespace WeStay.Tests.Infrastructure
             var envelope = await Json.ReadAsync<BookingCreatedEnvelope>(response);
             return envelope.Booking.Id;
         }
+
+        // Submit/refresh the caller's KYC document (leaves it Pending for admin moderation).
+        public static async Task SubmitVerificationAsync(ApiClient api, string token, string documentNumber)
+        {
+            var body = new { DocumentType = 0, DocumentNumber = documentNumber, ImageUrl = "https://example.com/kyc/doc.jpg" };
+            var response = await api.PutAsync("/api/auth/verification-update", body, token);
+            response.EnsureSuccessStatusCode();
+        }
     }
 }

@@ -119,6 +119,24 @@ namespace WeStay.BookingService.Services
             return await _bookingRepository.GetBookingsByListingIdAsync(listingId);
         }
 
+        // Admin oversight: all bookings across all users/listings, optionally filtered by status name.
+        public async Task<(IEnumerable<Booking> bookings, int totalCount)> GetAllBookingsAsync(int page, int pageSize, string? status)
+        {
+            int? statusId = null;
+            if (!string.IsNullOrWhiteSpace(status))
+            {
+                var s = await _statusRepository.GetStatusByNameAsync(status);
+                if (s == null)
+                {
+                    // Unknown status filter → empty page rather than an error.
+                    return (Enumerable.Empty<Booking>(), 0);
+                }
+                statusId = s.Id;
+            }
+
+            return await _bookingRepository.GetAllBookingsAsync(page, pageSize, statusId);
+        }
+
         public async Task<Booking> CancelBookingAsync(int bookingId, string reason)
         {
             var booking = await _bookingRepository.GetBookingByIdAsync(bookingId);
