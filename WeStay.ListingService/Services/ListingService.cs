@@ -54,6 +54,16 @@ namespace WeStay.ListingService.Services
                 .FirstOrDefaultAsync();
         }
 
+        public async Task<ListingCategory?> GetCategoryAsync(int listingId)
+        {
+            // Vertical lookup for service-to-service use (BookingService applies platform fees to
+            // ShortTerm only). Not status-filtered, mirroring GetHostIdAsync.
+            return await _context.Listings
+                .Where(l => l.Id == listingId)
+                .Select(l => (ListingCategory?)l.Category)
+                .FirstOrDefaultAsync();
+        }
+
         public async Task<IEnumerable<Listing>> GetListingsByHostIdAsync(int hostId)
         {
             return await _context.Listings

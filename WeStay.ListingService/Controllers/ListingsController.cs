@@ -151,6 +151,32 @@ namespace WeStay.ListingService.Controllers
         }
 
         /// <summary>
+        /// Get a listing's category (0=ShortTerm, 1=LongTerm, 2=Sale). Used by WeStay.BookingService
+        /// to decide whether platform fees apply (ShortTerm only). Returns the bare integer value.
+        /// </summary>
+        [HttpGet("{id}/category")]
+        [AllowAnonymous] // No user JWT...
+        [ServiceAuth]    // ...but a valid internal service key is required.
+        public async Task<IActionResult> GetListingCategory(int id)
+        {
+            try
+            {
+                var category = await _listingService.GetCategoryAsync(id);
+                if (category == null)
+                {
+                    return NotFound(new { Message = "Listing not found" });
+                }
+
+                return Ok((int)category.Value);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting category for listing {ListingId}", id);
+                return StatusCode(500, new { Message = "An error occurred while retrieving the listing category" });
+            }
+        }
+
+        /// <summary>
         /// Refresh a listing's cached review aggregates (AverageRating, ReviewCount). Called
         /// service-to-service by WeStay.ReviewService after each review mutation
         /// (PUT /api/listings/{id}/rating).

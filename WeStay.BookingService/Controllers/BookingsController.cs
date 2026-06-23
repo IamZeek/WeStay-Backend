@@ -68,7 +68,13 @@ namespace WeStay.BookingService.Controllers
                     {
                         createdBooking.Id,
                         createdBooking.BookingCode,
-                        createdBooking.TotalPrice,
+                        // Price breakdown (snapshotted at creation) for the booking confirmation.
+                        createdBooking.BasePrice,
+                        createdBooking.GuestServiceFeeAmount,
+                        createdBooking.GuestTotalPrice,
+                        createdBooking.HostPlatformFeeAmount,
+                        createdBooking.HostPayoutAmount,
+                        createdBooking.TotalPrice, // = GuestTotalPrice (what the guest pays)
                         createdBooking.Currency,
                         Status = "Pending"
                     }
@@ -489,6 +495,11 @@ namespace WeStay.BookingService.Controllers
                 CheckOutDate = booking.CheckOutDate,
                 NumberOfGuests = booking.NumberOfGuests,
                 TotalPrice = booking.TotalPrice,
+                BasePrice = booking.BasePrice,
+                GuestServiceFeeAmount = booking.GuestServiceFeeAmount,
+                GuestTotalPrice = booking.GuestTotalPrice,
+                HostPlatformFeeAmount = booking.HostPlatformFeeAmount,
+                HostPayoutAmount = booking.HostPayoutAmount,
                 Currency = booking.Currency,
                 Status = booking.Status?.Name,
                 SpecialRequests = booking.SpecialRequests,

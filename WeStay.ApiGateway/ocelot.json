@@ -78,6 +78,18 @@
     },
 
     // ---- BookingService (7292) ----
+    // Admin platform-fee config: Admin-gated at the gateway (same pattern as /api/auth/admin/*)
+    // and at the service. Must precede the general /api/bookings + availability routes (different
+    // prefix, so no ordering conflict, but kept here with its host service).
+    {
+      "DownstreamPathTemplate": "/api/admin/{everything}",
+      "DownstreamScheme": "https",
+      "DownstreamHostAndPorts": [ { "Host": "localhost", "Port": 7292 } ],
+      "UpstreamPathTemplate": "/api/admin/{everything}",
+      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE" ],
+      "AuthenticationOptions": { "AuthenticationProviderKey": "Bearer", "AllowedScopes": [] },
+      "RouteClaimsRequirement": { "role": "Admin" }
+    },
     // Admin oversight (GET /api/bookings/admin/all) and the /jobs/* triggers ride these existing
     // wildcard routes and are gated at the service via [Authorize(Roles="Admin")].
     // Availability reads are [AllowAnonymous].

@@ -47,6 +47,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 builder.Services.AddScoped<IBookingRepository, BookingRepository>();
 builder.Services.AddScoped<IBookingStatusRepository, BookingStatusRepository>();
 builder.Services.AddScoped<IBookingPaymentRepository, BookingPaymentRepository>();
+builder.Services.AddScoped<IPlatformFeeConfigRepository, PlatformFeeConfigRepository>();
 // IBookingReviewRepository moved to /Future (Phase 3 — Reviews); not registered.
 
 // Register services

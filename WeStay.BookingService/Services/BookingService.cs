@@ -19,6 +19,7 @@ namespace WeStay.BookingService.Services
         private readonly IConfiguration _configuration;
         private readonly NotificationClient _notifications;
         private readonly IServiceScopeFactory _scopeFactory;
+        private readonly IPlatformFeeConfigRepository _feeConfigRepository;
 
         public BookingService(
             IBookingRepository bookingRepository,
@@ -29,7 +30,8 @@ namespace WeStay.BookingService.Services
             HttpClient httpClient,
             IConfiguration configuration,
             NotificationClient notifications,
-            IServiceScopeFactory scopeFactory)
+            IServiceScopeFactory scopeFactory,
+            IPlatformFeeConfigRepository feeConfigRepository)
         {
             _bookingRepository = bookingRepository;
             _statusRepository = statusRepository;
@@ -40,6 +42,7 @@ namespace WeStay.BookingService.Services
             _configuration = configuration;
             _notifications = notifications;
             _scopeFactory = scopeFactory;
+            _feeConfigRepository = feeConfigRepository;
         }
 
         public async Task<Booking> CreateBookingAsync(Booking booking, List<BookingGuest> guests)
@@ -68,9 +71,28 @@ namespace WeStay.BookingService.Services
                 throw new InvalidOperationException("Listing not found");
             }
 
-            // Calculate total price
+            // Base price (nights × nightly rate) — unchanged from the original logic.
             var nights = (booking.CheckOutDate - booking.CheckInDate).Days;
-            booking.TotalPrice = listingPrice.Value * nights;
+            var basePrice = listingPrice.Value * nights;
+
+            // Platform fees apply to SHORT-TERM listings only (other verticals have separate,
+            // not-yet-built fee models). Snapshot the AMOUNTS onto the booking so a later admin fee
+            // change never alters this booking. Percentages come from the global config at this moment.
+            var category = await GetListingCategoryAsync(booking.ListingId); // 0 = ShortTerm
+            var isShortTerm = category == 0;
+            var feeConfig = await _feeConfigRepository.GetAsync();
+            var guestFeePct = isShortTerm ? feeConfig.GuestServiceFee : 0m;
+            var hostFeePct = isShortTerm ? feeConfig.HostPlatformFee : 0m;
+
+            var guestServiceFeeAmount = Math.Round(basePrice * guestFeePct / 100m, 2, MidpointRounding.AwayFromZero);
+            var hostPlatformFeeAmount = Math.Round(basePrice * hostFeePct / 100m, 2, MidpointRounding.AwayFromZero);
+
+            booking.BasePrice = basePrice;
+            booking.GuestServiceFeeAmount = guestServiceFeeAmount;
+            booking.GuestTotalPrice = basePrice + guestServiceFeeAmount;     // guest pays this
+            booking.HostPlatformFeeAmount = hostPlatformFeeAmount;
+            booking.HostPayoutAmount = basePrice - hostPlatformFeeAmount;    // host receives this
+            booking.TotalPrice = booking.GuestTotalPrice;                    // legacy column = guest total
 
             // Set initial status to Pending
             var pendingStatus = await _statusRepository.GetStatusByNameAsync("Pending");
@@ -417,6 +439,35 @@ namespace WeStay.BookingService.Services
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error getting listing owner for ID: {ListingId}", listingId);
+                return null;
+            }
+        }
+
+        // Listing vertical (0=ShortTerm, 1=LongTerm, 2=Sale) — drives whether platform fees apply.
+        // Best-effort: if it can't be resolved, the caller treats the booking as non-ShortTerm (0 fees),
+        // so a hiccup never over-charges.
+        private async Task<int?> GetListingCategoryAsync(int listingId)
+        {
+            try
+            {
+                var listingServiceUrl = _configuration["Services:ListingService"];
+                var response = await _httpClient.GetAsync($"{listingServiceUrl}/api/listings/{listingId}/category");
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var content = await response.Content.ReadAsStringAsync();
+                    if (int.TryParse(content, out var category))
+                    {
+                        return category;
+                    }
+                }
+
+                _logger.LogWarning("Failed to get listing category for ID: {ListingId}", listingId);
+                return null;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting listing category for ID: {ListingId}", listingId);
                 return null;
             }
         }

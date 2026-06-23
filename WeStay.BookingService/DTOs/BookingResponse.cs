@@ -9,7 +9,15 @@
         public DateTime CheckInDate { get; set; }
         public DateTime CheckOutDate { get; set; }
         public int NumberOfGuests { get; set; }
-        public decimal TotalPrice { get; set; }
+        public decimal TotalPrice { get; set; } // = GuestTotalPrice (what the guest is charged)
+
+        // Snapshotted fee breakdown (short-term bookings; 0 on other verticals / pre-fee bookings).
+        public decimal BasePrice { get; set; }
+        public decimal GuestServiceFeeAmount { get; set; }
+        public decimal GuestTotalPrice { get; set; }
+        public decimal HostPlatformFeeAmount { get; set; }
+        public decimal HostPayoutAmount { get; set; }
+
         public string Currency { get; set; }
         public string Status { get; set; }
         public string SpecialRequests { get; set; }

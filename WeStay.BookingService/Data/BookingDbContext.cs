@@ -15,6 +15,7 @@ namespace WeStay.BookingService.Data
         public DbSet<BookingStatus> BookingStatuses { get; set; }
         public DbSet<BookingGuest> BookingGuests { get; set; }
         public DbSet<BookingPayment> BookingPayments { get; set; }
+        public DbSet<PlatformFeeConfig> PlatformFeeConfigs { get; set; }
         // BookingReviews DbSet moved to /Future (Phase 3 — Reviews). Excluded from the active model.
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -76,6 +77,18 @@ namespace WeStay.BookingService.Data
                 new BookingStatus { Id = 4, Name = "Completed", Description = "Booking has been completed successfully" },
                 new BookingStatus { Id = 5, Name = "Refunded", Description = "Booking was cancelled and refunded" },
                 new BookingStatus { Id = 6, Name = "Rejected", Description = "Booking was rejected by the host" }
+            );
+
+            // Single global platform-fee config. Defaults: guest 8% / host 2% (10% combined) —
+            // intentionally below the ~15% status quo, per WeStay's "meaningfully cheaper" positioning.
+            modelBuilder.Entity<PlatformFeeConfig>().HasData(
+                new PlatformFeeConfig
+                {
+                    Id = 1,
+                    GuestServiceFee = 8m,
+                    HostPlatformFee = 2m,
+                    UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
+                }
             );
         }
     }

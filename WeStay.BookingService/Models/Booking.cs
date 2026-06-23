@@ -30,10 +30,30 @@ namespace WeStay.BookingService.Models
         [Range(1, 50)]
         public int NumberOfGuests { get; set; }
 
+        // What the guest actually pays = BasePrice + GuestServiceFeeAmount. Kept in sync with
+        // GuestTotalPrice (legacy column; its meaning is "the booking total the guest is charged").
         [Required]
         [Column(TypeName = "decimal(10, 2)")]
         [Range(0.01, 100000)]
         public decimal TotalPrice { get; set; }
+
+        // ===== Fee snapshot, written once at creation and NEVER recalculated. A later admin fee
+        // change must not retroactively alter an existing booking. Fees apply to SHORT-TERM only;
+        // other verticals snapshot 0. (decimal(10,2), default 0 for pre-fee bookings.) =====
+        [Column(TypeName = "decimal(10, 2)")]
+        public decimal BasePrice { get; set; }            // nights × pricePerNight
+
+        [Column(TypeName = "decimal(10, 2)")]
+        public decimal GuestServiceFeeAmount { get; set; } // BasePrice × GuestServiceFee%
+
+        [Column(TypeName = "decimal(10, 2)")]
+        public decimal GuestTotalPrice { get; set; }       // BasePrice + GuestServiceFeeAmount (guest pays)
+
+        [Column(TypeName = "decimal(10, 2)")]
+        public decimal HostPlatformFeeAmount { get; set; } // BasePrice × HostPlatformFee%
+
+        [Column(TypeName = "decimal(10, 2)")]
+        public decimal HostPayoutAmount { get; set; }      // BasePrice − HostPlatformFeeAmount (host receives)
 
         [Required]
         [MaxLength(3)]
