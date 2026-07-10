@@ -4,6 +4,7 @@ using WeStay.BookingService.Repositories;
 using WeStay.BookingService.Repositories.Interfaces;
 using WeStay.BookingService.Services;
 using WeStay.BookingService.Services.Interfaces;
+using WeStay.BookingService.Services.Safepay;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
@@ -48,6 +49,7 @@ builder.Services.AddScoped<IBookingRepository, BookingRepository>();
 builder.Services.AddScoped<IBookingStatusRepository, BookingStatusRepository>();
 builder.Services.AddScoped<IBookingPaymentRepository, BookingPaymentRepository>();
 builder.Services.AddScoped<IPlatformFeeConfigRepository, PlatformFeeConfigRepository>();
+builder.Services.AddScoped<IPaymentRepository, PaymentRepository>();
 // IBookingReviewRepository moved to /Future (Phase 3 — Reviews); not registered.
 
 // Register services
@@ -62,6 +64,12 @@ builder.Services.AddHttpClient<NotificationClient>(c =>
     var internalKey = builder.Configuration["ServiceAuth:InternalApiKey"];
     if (!string.IsNullOrEmpty(internalKey)) c.DefaultRequestHeaders.Add("X-Internal-Api-Key", internalKey);
 });
+
+// SafePay payments. SafepayGateway gets its OWN HttpClient (external SafePay, no internal key).
+// PaymentService uses the default internal-key HttpClient for the /owner ownership check.
+builder.Services.AddScoped<IPaymentService, PaymentService>();
+builder.Services.AddHttpClient<ISafepayGateway, SafepayGateway>();
+builder.Services.AddScoped<IHostPayoutExecutor, ManualHostPayoutExecutor>();
 
 // Background jobs for automatic booking state transitions (intervals/window in the "Booking" config).
 builder.Services.AddHostedService<BookingCompletionService>();

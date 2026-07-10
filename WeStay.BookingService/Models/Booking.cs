@@ -57,7 +57,7 @@ namespace WeStay.BookingService.Models
 
         [Required]
         [MaxLength(3)]
-        public string Currency { get; set; } = "USD";
+        public string Currency { get; set; } = "PKR"; // WeStay prices are PKR end-to-end (no FX/multi-currency)
 
         [Required]
         public int StatusId { get; set; }

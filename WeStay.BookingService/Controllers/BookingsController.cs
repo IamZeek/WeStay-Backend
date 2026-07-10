@@ -17,14 +17,17 @@ namespace WeStay.BookingService.Controllers
     {
         private readonly IBookingService _bookingService;
         private readonly IAvailabilityService _availabilityService;
+        private readonly IPaymentService _paymentService;
         private readonly ILogger<BookingsController> _logger;
         public BookingsController(
             IBookingService bookingService,
             IAvailabilityService availabilityService,
+            IPaymentService paymentService,
             ILogger<BookingsController> logger)
         {
             _bookingService = bookingService;
             _availabilityService = availabilityService;
+            _paymentService = paymentService;
             _logger = logger;
         }
 
@@ -259,6 +262,10 @@ namespace WeStay.BookingService.Controllers
 
                 // Event: booking cancelled → notify the other party. Best-effort, never fails the cancel.
                 await _bookingService.NotifyBookingCancelledAsync(cancelledBooking, userId, User.IsInRole("Admin"));
+
+                // If the booking was paid, refund the guest (GuestTotalPrice minus cancellation fee).
+                // Best-effort — never fails the cancel; a failed refund is logged for admin follow-up.
+                await _paymentService.RefundForBookingIfPaidAsync(id);
 
                 return Ok(new
                 {

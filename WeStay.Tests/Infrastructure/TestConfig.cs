@@ -26,6 +26,10 @@ namespace WeStay.Tests.Infrastructure
         public static string InternalApiKey =>
             Config["ServiceAuth:InternalApiKey"] ?? "westay-dev-internal-key-change-in-prod";
 
+        // Shared SafePay webhook secret for the payment tests — must equal BookingService's
+        // Safepay:WebhookSecret for the valid-signature tests to run (else they skip). Empty by default.
+        public static string SafepayWebhookSecret => Config["Safepay:WebhookSecret"] ?? "";
+
         private static string Url(string key, string fallback) => Config[$"BaseUrls:{key}"] ?? fallback;
     }
 }

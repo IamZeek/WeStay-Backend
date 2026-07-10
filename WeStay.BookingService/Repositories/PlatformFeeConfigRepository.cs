@@ -22,7 +22,7 @@ namespace WeStay.BookingService.Repositories
             return config ?? new PlatformFeeConfig { Id = 1, GuestServiceFee = 0m, HostPlatformFee = 0m, UpdatedAt = DateTime.UtcNow };
         }
 
-        public async Task<PlatformFeeConfig> UpdateAsync(decimal guestServiceFee, decimal hostPlatformFee)
+        public async Task<PlatformFeeConfig> UpdateAsync(decimal guestServiceFee, decimal hostPlatformFee, decimal cancellationFeePercent)
         {
             var config = await _context.PlatformFeeConfigs.OrderBy(c => c.Id).FirstOrDefaultAsync();
             if (config == null)
@@ -33,6 +33,7 @@ namespace WeStay.BookingService.Repositories
 
             config.GuestServiceFee = guestServiceFee;
             config.HostPlatformFee = hostPlatformFee;
+            config.CancellationFeePercent = cancellationFeePercent;
             config.UpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();

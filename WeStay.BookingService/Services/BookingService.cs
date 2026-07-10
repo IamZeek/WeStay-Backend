@@ -20,6 +20,7 @@ namespace WeStay.BookingService.Services
         private readonly NotificationClient _notifications;
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly IPlatformFeeConfigRepository _feeConfigRepository;
+        private readonly IPaymentService _paymentService;
 
         public BookingService(
             IBookingRepository bookingRepository,
@@ -31,7 +32,8 @@ namespace WeStay.BookingService.Services
             IConfiguration configuration,
             NotificationClient notifications,
             IServiceScopeFactory scopeFactory,
-            IPlatformFeeConfigRepository feeConfigRepository)
+            IPlatformFeeConfigRepository feeConfigRepository,
+            IPaymentService paymentService)
         {
             _bookingRepository = bookingRepository;
             _statusRepository = statusRepository;
@@ -43,6 +45,7 @@ namespace WeStay.BookingService.Services
             _notifications = notifications;
             _scopeFactory = scopeFactory;
             _feeConfigRepository = feeConfigRepository;
+            _paymentService = paymentService;
         }
 
         public async Task<Booking> CreateBookingAsync(Booking booking, List<BookingGuest> guests)
@@ -240,6 +243,9 @@ namespace WeStay.BookingService.Services
 
             booking.StatusId = completedStatus.Id;
             await _bookingRepository.UpdateBookingAsync(booking);
+
+            // Checkout passed → the held payment becomes releasable to the host (best-effort).
+            await _paymentService.MarkReleasableForBookingAsync(bookingId);
 
             return await _bookingRepository.GetBookingByIdAsync(bookingId);
         }

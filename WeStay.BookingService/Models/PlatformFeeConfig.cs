@@ -24,6 +24,12 @@ namespace WeStay.BookingService.Models
         [Range(0, 100)]
         public decimal HostPlatformFee { get; set; }
 
+        // Kept by WeStay when a guest cancels a PAID booking; the guest is refunded GuestTotalPrice
+        // minus this percentage of GuestTotalPrice. Read from DB at cancellation time.
+        [Column(TypeName = "decimal(5, 2)")]
+        [Range(0, 100)]
+        public decimal CancellationFeePercent { get; set; }
+
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
     }
 }

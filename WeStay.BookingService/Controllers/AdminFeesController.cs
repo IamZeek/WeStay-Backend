@@ -28,7 +28,7 @@ namespace WeStay.BookingService.Controllers
         public async Task<IActionResult> Get()
         {
             var config = await _repository.GetAsync();
-            return Ok(new { config.GuestServiceFee, config.HostPlatformFee, config.UpdatedAt });
+            return Ok(new { config.GuestServiceFee, config.HostPlatformFee, config.CancellationFeePercent, config.UpdatedAt });
         }
 
         [HttpPut]
@@ -39,10 +39,11 @@ namespace WeStay.BookingService.Controllers
                 return BadRequest(new { Message = "Each fee must be a percentage between 0 and 100.", Errors = ModelState.Values.SelectMany(v => v.Errors) });
             }
 
-            var config = await _repository.UpdateAsync(request.GuestServiceFee, request.HostPlatformFee);
-            _logger.LogInformation("Platform fees updated: guest {Guest}% / host {Host}%", config.GuestServiceFee, config.HostPlatformFee);
+            var config = await _repository.UpdateAsync(request.GuestServiceFee, request.HostPlatformFee, request.CancellationFeePercent);
+            _logger.LogInformation("Platform fees updated: guest {Guest}% / host {Host}% / cancellation {Cancel}%",
+                config.GuestServiceFee, config.HostPlatformFee, config.CancellationFeePercent);
 
-            return Ok(new { Message = "Fees updated", config.GuestServiceFee, config.HostPlatformFee, config.UpdatedAt });
+            return Ok(new { Message = "Fees updated", config.GuestServiceFee, config.HostPlatformFee, config.CancellationFeePercent, config.UpdatedAt });
         }
     }
 
@@ -53,5 +54,8 @@ namespace WeStay.BookingService.Controllers
 
         [Range(0, 100, ErrorMessage = "HostPlatformFee must be between 0 and 100.")]
         public decimal HostPlatformFee { get; set; }
+
+        [Range(0, 100, ErrorMessage = "CancellationFeePercent must be between 0 and 100.")]
+        public decimal CancellationFeePercent { get; set; }
     }
 }
