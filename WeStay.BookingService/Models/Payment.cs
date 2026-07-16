@@ -66,8 +66,10 @@ namespace WeStay.BookingService.Models
         [Column(TypeName = "decimal(10, 2)")]
         public decimal? CancellationFeeAmount { get; set; }
 
+        // NOT NULL column, only set on refund; default to empty so the initial insert never sends NULL
+        // (same pattern as Booking.CancellationReason and other optional strings in this codebase).
         [MaxLength(64)]
-        public string SafepayRefundRef { get; set; }
+        public string SafepayRefundRef { get; set; } = string.Empty;
 
         // Payout tracking (the automation structure; execution is a manual admin step for now).
         public bool Releasable { get; set; }
