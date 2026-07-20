@@ -75,9 +75,13 @@ namespace WeStay.BookingService.Services
 
             payment = existing == null ? await _payments.CreateAsync(payment) : await _payments.UpdateAsync(payment);
 
-            var redirectUrl = _configuration["Safepay:RedirectUrl"] ?? "https://westay.local/payment/success";
-            var cancelUrl = _configuration["Safepay:CancelUrl"] ?? "https://westay.local/payment/cancel";
-            var checkoutUrl = _safepay.BuildCheckoutUrl(tracker, booking.BookingCode, redirectUrl, cancelUrl);
+            // SafePay redirects the guest here after checkout. Config-driven (Safepay:SuccessUrl /
+            // Safepay:CancelUrl) — real values in User Secrets, empty placeholders in appsettings.
+            var successUrl = _configuration["Safepay:SuccessUrl"];
+            if (string.IsNullOrWhiteSpace(successUrl)) successUrl = "https://westay.local/payment/success";
+            var cancelUrl = _configuration["Safepay:CancelUrl"];
+            if (string.IsNullOrWhiteSpace(cancelUrl)) cancelUrl = "https://westay.local/payment/cancel";
+            var checkoutUrl = _safepay.BuildCheckoutUrl(tracker, booking.BookingCode, successUrl, cancelUrl);
 
             _logger.LogInformation("Payment {PaymentId} initiated for booking {BookingId} ({Amount} {Currency}).",
                 payment.Id, bookingId, amount, currency);
@@ -122,6 +126,34 @@ namespace WeStay.BookingService.Services
                 payment.Id, payment.BookingId);
             return WebhookResult.Processed;
         }
+
+        // ============================ SANDBOX TESTING ONLY ============================
+        // Manually drives a payment through the SafePay webhook's success path
+        // (Pending → Paid → HeldForStay) WITHOUT a real webhook. This exists only because SafePay's
+        // sandbox webhook delivery is unreliable; it lets us verify the downstream state machine
+        // (release-on-completion, mark-paid-out). It performs the EXACT same transition as the success
+        // branch of HandleWebhookAsync — no signature, no external call.
+        // ⚠️ REMOVE THIS METHOD (and its endpoint + interface member) BEFORE PRODUCTION. ⚠️
+        public async Task<Payment> MarkPaidForTestingAsync(int paymentId)
+        {
+            var payment = await _payments.GetByIdAsync(paymentId);
+            if (payment == null) throw new KeyNotFoundException("Payment not found.");
+
+            // Same guard as the webhook: only a Pending payment can be marked paid.
+            if (payment.Status != PaymentState.Pending.ToString())
+                throw new InvalidOperationException($"Payment can only be marked paid from Pending (status is '{payment.Status}').");
+
+            var now = DateTime.UtcNow;
+            payment.Status = PaymentState.HeldForStay.ToString();
+            payment.PaidAt = now;
+            payment.HeldAt = now;
+            await _payments.UpdateAsync(payment);
+
+            _logger.LogWarning("SANDBOX: Payment {PaymentId} (booking {BookingId}) manually marked Paid → HeldForStay (no webhook).",
+                payment.Id, payment.BookingId);
+            return payment;
+        }
+        // ==========================================================================
 
         public async Task<Payment> GetPaymentForBookingAsync(int bookingId, int requestingUserId, bool isAdmin)
         {

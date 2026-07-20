@@ -20,5 +20,10 @@ namespace WeStay.BookingService.Services.Interfaces
         // Admin.
         Task<(IEnumerable<Payment> payments, int totalCount)> GetAllAsync(int page, int pageSize, string status);
         Task<Payment> MarkPaidOutAsync(int paymentId);
+
+        // SANDBOX TESTING ONLY — remove before production. Simulates the SafePay webhook's success path
+        // (Pending → Paid → HeldForStay) so the rest of the state machine can be exercised without
+        // depending on sandbox webhook delivery. See PaymentService for details.
+        Task<Payment> MarkPaidForTestingAsync(int paymentId);
     }
 }

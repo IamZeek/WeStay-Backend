@@ -63,5 +63,27 @@ namespace WeStay.BookingService.Controllers
                 return StatusCode(500, new { Message = "An error occurred while marking the payout" });
             }
         }
+
+        // ============================ SANDBOX TESTING ONLY ============================
+        // Manually transitions a payment Pending → Paid → HeldForStay, exactly as the SafePay webhook
+        // would, so the rest of the state machine (release cycle, mark-paid-out) can be verified without
+        // depending on SafePay's sandbox webhook delivery (which is unreliable). Admin-only.
+        // ⚠️ REMOVE THIS ENDPOINT BEFORE PRODUCTION — it fakes a payment with no money movement. ⚠️
+        [HttpPost("{id}/mark-paid")]
+        public async Task<IActionResult> MarkPaidForTesting(int id)
+        {
+            try
+            {
+                var payment = await _payments.MarkPaidForTestingAsync(id);
+                return Ok(PaymentResponse.From(payment));
+            }
+            catch (KeyNotFoundException ex) { return NotFound(new { Message = ex.Message }); }
+            catch (InvalidOperationException ex) { return BadRequest(new { Message = ex.Message }); }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error marking payment {PaymentId} paid (sandbox)", id);
+                return StatusCode(500, new { Message = "An error occurred while marking the payment paid" });
+            }
+        }
     }
 }

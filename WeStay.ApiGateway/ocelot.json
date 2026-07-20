@@ -129,6 +129,15 @@
       "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE" ],
       "AuthenticationOptions": { "AuthenticationProviderKey": "Bearer", "AllowedScopes": [] }
     },
+    // SafePay browser redirect landing pages (/payment/success, /payment/cancel). Public (the redirect
+    // carries no JWT); GET only. Covers both success + cancel via the wildcard.
+    {
+      "DownstreamPathTemplate": "/payment/{everything}",
+      "DownstreamScheme": "https",
+      "DownstreamHostAndPorts": [ { "Host": "localhost", "Port": 7292 } ],
+      "UpstreamPathTemplate": "/payment/{everything}",
+      "UpstreamHttpMethod": [ "GET", "OPTIONS" ]
+    },
 
     // ---- MessagingService (7179) ----
     // Conversations and messages are fully [Authorize] — validated at the gateway.

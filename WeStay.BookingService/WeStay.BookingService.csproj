@@ -24,6 +24,10 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.19" />
+    <!-- Official SafePay .NET SDK (owner: Safepay). Used for tracker creation + hosted-checkout URL
+         generation. NOTE: ships only a net461 target (works on net8 via the compat shim) and has NO
+         refund API, so RefundAsync stays on raw HttpClient. -->
+    <PackageReference Include="SFPY.net" Version="1.2.1" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="8.0.19">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>

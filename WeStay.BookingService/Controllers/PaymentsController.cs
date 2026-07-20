@@ -114,6 +114,11 @@ namespace WeStay.BookingService.Controllers
         // Defensive parse across the SafePay/webhook shapes: signature may be a header or a payload
         // field; tracker/state may be nested. Isolated so it's one place to adjust if the live shape
         // differs. (Verification of the signature itself happens in PaymentService/SafepayGateway.)
+        //
+        // Official SDK (SFPY.net) webhook shape:
+        //   { token, client_id, type:"payment:created", notification:{ tracker, state:"PAID", amount, currency } }
+        // The tracker lives at notification.tracker — it MUST take priority over the top-level "token"
+        // (which is a distinct value, NOT the tracker). Older nested shapes kept for forward-compat.
         private static (string tracker, bool success, string signature) ParseWebhook(string rawBody, IHeaderDictionary headers)
         {
             string tracker = null, signature = null, state = null, status = null;
@@ -121,15 +126,20 @@ namespace WeStay.BookingService.Controllers
             {
                 using var doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(rawBody) ? "{}" : rawBody);
                 var root = doc.RootElement;
-                tracker = FirstString(root, "tracker", "token")
+                tracker = Nested(root, "notification", "tracker")     // SDK shape (current)
+                          ?? FirstString(root, "tracker")
                           ?? Nested(root, "data", "tracker", "token")
-                          ?? Nested(root, "data", "token");
+                          ?? Nested(root, "data", "token")
+                          ?? FirstString(root, "token");              // last resort (not the SDK's tracker)
                 signature = FirstString(root, "signature") ?? Nested(root, "data", "signature");
-                state = Nested(root, "data", "tracker", "state") ?? FirstString(root, "state");
+                state = Nested(root, "notification", "state")         // SDK: "PAID"
+                        ?? Nested(root, "data", "tracker", "state")
+                        ?? FirstString(root, "state");
                 status = FirstString(root, "status");
             }
             catch { /* fall through to header signature / empty */ }
 
+            // SDK sends the signature in the X-SFPY-SIGNATURE header (IHeaderDictionary is case-insensitive).
             if (string.IsNullOrEmpty(signature) && headers.TryGetValue("X-SFPY-Signature", out var h))
             {
                 signature = h.ToString();

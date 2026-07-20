@@ -3,17 +3,24 @@ using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Sdk = global::Safepay;   // official SafePay .NET SDK (SFPY.net); aliased to avoid clashing with this namespace
 
 namespace WeStay.BookingService.Services.Safepay
 {
     /// <summary>
-    /// Direct REST integration with SafePay's Hosted Checkout (the official .NET SDK is unmaintained
-    /// and has no refund support, so we call the API directly and verify the HMAC ourselves).
+    /// SafePay Hosted Checkout integration. Tracker creation + checkout-URL generation go through the
+    /// OFFICIAL SafePay .NET SDK (SFPY.net) — it sends the current required fields (intent/mode) and
+    /// builds the correct /checkout/pay URL. The SDK has NO refund API, so RefundAsync calls the REST
+    /// endpoint directly; webhook signatures are HMAC-verified here.
     ///
     /// Secrets come from config (User Secrets) — never logged. Fail-closed: throws if unconfigured.
     /// </summary>
     public class SafepayGateway : ISafepayGateway
     {
+        // The SDK holds API credentials + HttpClient in STATIC state; initialize its client once.
+        private static readonly object _sdkLock = new();
+        private static bool _sdkClientInitialized;
+
         private readonly HttpClient _http;
         private readonly ILogger<SafepayGateway> _logger;
 
@@ -40,15 +47,28 @@ namespace WeStay.BookingService.Services.Safepay
 
         private bool IsProduction => _environment == "production";
         private string ApiBase => IsProduction ? "https://api.getsafepay.com" : "https://sandbox.api.getsafepay.com";
-        private string CheckoutBase => IsProduction ? "https://www.getsafepay.com/components" : "https://sandbox.api.getsafepay.com/components";
+
+        // Push our credentials into the SDK's static config and initialize its HttpClient once.
+        private void EnsureSdkConfigured()
+        {
+            lock (_sdkLock)
+            {
+                Sdk.SafepayConfiguration.ApiKey = _apiKey;
+                Sdk.SafepayConfiguration.WebhookSecret = _webhookSecret;
+                Sdk.SafepayConfiguration.Environment = _environment;   // sets the SDK's sandbox/prod ApiBase
+                if (!_sdkClientInitialized)
+                {
+                    Sdk.SafepayClient.InitializeApiClient(false);       // false = not debug-logging
+                    _sdkClientInitialized = true;
+                }
+            }
+        }
 
         // ===================================================================================
-        //  AMOUNT UNITS — the single source of truth. SafePay Hosted Checkout (/order/v1/init)
-        //  expects MAJOR units (decimal PKR, e.g. 1000.00 = PKR 1,000), per SafePay's own
-        //  integration gist ("amount": 1000.00) and the official WooCommerce plugin (which passes
-        //  the raw decimal order total). This is NOT the newer /payments/session/setup CYBERSOURCE
-        //  flow, which uses smallest units (paisa). If a sandbox test EVER shows a 100× discrepancy
-        //  on the checkout page, change ONLY this method (× 100m) — nothing else depends on units.
+        //  AMOUNT UNITS — single source of truth. VERIFIED BY OBSERVATION on the SDK's /checkout/pay
+        //  page: it renders the amount in MAJOR units (rupees), NOT paisa. Sending 1,080,000 showed
+        //  "Rs. 1,080,000"; sending 10,800 shows "Rs. 10,800". So pass the major-unit value as-is.
+        //  ⚠️ If the checkout page ever shows a 100× discrepancy, change ONLY this method.
         // ===================================================================================
         private static decimal ToSafepayAmount(decimal majorUnits) => majorUnits;
 
@@ -64,46 +84,32 @@ namespace WeStay.BookingService.Services.Safepay
         public async Task<string> CreateTrackerAsync(decimal amount, string currency)
         {
             EnsureConfigured();
+            EnsureSdkConfigured();
 
-            var payload = new
-            {
-                client = _apiKey,
-                amount = ToSafepayAmount(amount),
-                currency,
-                environment = _environment
-            };
+            // Official SDK builds the current /order/v1/init request (incl. the required intent/mode)
+            // and returns the tracker token. Amount is in MAJOR units (see ToSafepayAmount) — the SDK
+            // sends the value through as-is; /checkout/pay renders it in rupees.
+            var response = await Sdk.Order.CreateTracker((double)ToSafepayAmount(amount), currency);
 
-            var response = await _http.PostAsJsonAsync($"{ApiBase}/order/v1/init", payload);
-            var body = await response.Content.ReadAsStringAsync();
-            if (!response.IsSuccessStatusCode)
+            var token = response?.Data?.Token;
+            if (!string.Equals(response?.Status?.Message, "success", StringComparison.OrdinalIgnoreCase)
+                || string.IsNullOrEmpty(token))
             {
-                // Do not log the request body (contains the apiKey). Status + trimmed body only.
-                _logger.LogError("SafePay init failed: {Status} {Body}", (int)response.StatusCode, Trim(body));
-                throw new InvalidOperationException($"SafePay init failed ({(int)response.StatusCode}).");
-            }
-
-            var token = ExtractToken(body);
-            if (string.IsNullOrEmpty(token))
-            {
-                _logger.LogError("SafePay init returned no token. Body: {Body}", Trim(body));
-                throw new InvalidOperationException("SafePay init returned no tracker token.");
+                // Never log the request (carries the apiKey). Status message only.
+                _logger.LogError("SafePay tracker creation failed: {Status}", response?.Status?.Message);
+                throw new InvalidOperationException("SafePay tracker creation failed.");
             }
             return token;
         }
 
         public string BuildCheckoutUrl(string tracker, string orderId, string redirectUrl, string cancelUrl)
         {
-            var q = new Dictionary<string, string>
-            {
-                ["env"] = _environment,
-                ["beacon"] = tracker,
-                ["source"] = _source,
-                ["order_id"] = orderId,
-                ["redirect_url"] = redirectUrl,
-                ["cancel_url"] = cancelUrl
-            };
-            var query = string.Join("&", q.Select(kv => $"{kv.Key}={Uri.EscapeDataString(kv.Value)}"));
-            return $"{CheckoutBase}?{query}";
+            EnsureSdkConfigured();
+            // Official SDK generates the hosted-checkout URL (/checkout/pay?...&webhooks=true). NOTE the
+            // SDK's parameter order is (trackerToken, orderId, cancelUrl, redirectUrl, source, usingWebhookVerification)
+            // — cancelUrl precedes redirectUrl. usingWebhookVerification:true because the authoritative
+            // state change is driven by the signed webhook, not the browser redirect.
+            return Sdk.Checkout.CreateSession(tracker, orderId, cancelUrl, redirectUrl, _source, usingWebhookVerification: true);
         }
 
         public bool VerifyWebhookSignature(string tracker, string providedSignature)
@@ -164,22 +170,6 @@ namespace WeStay.BookingService.Services.Safepay
             var sb = new StringBuilder(hash.Length * 2);
             foreach (var x in hash) sb.Append(x.ToString("x2", CultureInfo.InvariantCulture));
             return sb.ToString();
-        }
-
-        private static string ExtractToken(string body)
-        {
-            try
-            {
-                using var doc = JsonDocument.Parse(body);
-                var root = doc.RootElement;
-                // Response shapes seen: { "data": { "token": "track_..." } } or { "token": "..." }.
-                if (root.TryGetProperty("data", out var data) && data.TryGetProperty("token", out var t1))
-                    return t1.GetString();
-                if (root.TryGetProperty("token", out var t2))
-                    return t2.GetString();
-                return null;
-            }
-            catch { return null; }
         }
 
         private static string ExtractRefundState(string body)
