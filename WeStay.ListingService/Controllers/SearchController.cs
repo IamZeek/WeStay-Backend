@@ -11,11 +11,13 @@ namespace WeStay.ListingService.Controllers
     public class SearchController : ControllerBase
     {
         private readonly ISearchService _searchService;
+        private readonly IHostProfileService _hostProfileService;
         private readonly ILogger<SearchController> _logger;
 
-        public SearchController(ISearchService searchService, ILogger<SearchController> logger)
+        public SearchController(ISearchService searchService, IHostProfileService hostProfileService, ILogger<SearchController> logger)
         {
             _searchService = searchService;
+            _hostProfileService = hostProfileService;
             _logger = logger;
         }
 
@@ -28,6 +30,9 @@ namespace WeStay.ListingService.Controllers
             try
             {
                 var (listings, totalCount) = await _searchService.SearchListingsAsync(request);
+
+                // One batched (and cached) AuthService call for the whole page — see HostProfileService.
+                await _hostProfileService.EnrichAsync(listings);
 
                 return Ok(new
                 {
@@ -54,6 +59,7 @@ namespace WeStay.ListingService.Controllers
             try
             {
                 var featuredListings = await _searchService.GetFeaturedListingsAsync();
+                await _hostProfileService.EnrichAsync(featuredListings);
                 return Ok(featuredListings);
             }
             catch (Exception ex)
@@ -72,6 +78,7 @@ namespace WeStay.ListingService.Controllers
             try
             {
                 var similarListings = await _searchService.GetSimilarListingsAsync(listingId);
+                await _hostProfileService.EnrichAsync(similarListings);
                 return Ok(similarListings);
             }
             catch (Exception ex)

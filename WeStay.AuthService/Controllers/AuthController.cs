@@ -458,6 +458,67 @@ namespace WeStay.AuthService.Controllers
             }
         }
 
+        /// <summary>
+        /// Internal service-to-service: public-safe profile summary for one user (name, KYC-verified
+        /// flag, avatar). Used by ListingService to enrich listing/search responses with host info.
+        /// Same [ServiceAuth] pattern as /contact; the gateway keeps /api/auth/users/* Admin-gated
+        /// for external callers.
+        /// </summary>
+        [HttpGet("users/{id}/profile-summary")]
+        [AllowAnonymous] // No user JWT...
+        [ServiceAuth]    // ...but a valid internal service key is required.
+        public async Task<IActionResult> GetUserProfileSummary(int id)
+        {
+            try
+            {
+                var summaries = await _userService.GetProfileSummariesAsync(new[] { id });
+                var summary = summaries.FirstOrDefault();
+                if (summary == null)
+                {
+                    return NotFound(new { Message = "User not found" });
+                }
+
+                return Ok(summary);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error fetching profile summary for user {UserId}", id);
+                return StatusCode(500, new { Message = "An error occurred while fetching the profile summary" });
+            }
+        }
+
+        /// <summary>
+        /// Internal service-to-service: BATCH variant of profile-summary so ListingService can
+        /// enrich a whole search page (up to 20 listings) with ONE call instead of N — see the
+        /// N+1 note in HostProfileService. Returns only the ids that exist.
+        /// </summary>
+        [HttpPost("users/profile-summaries")]
+        [AllowAnonymous] // No user JWT...
+        [ServiceAuth]    // ...but a valid internal service key is required.
+        public async Task<IActionResult> GetUserProfileSummaries([FromBody] ProfileSummariesRequest request)
+        {
+            try
+            {
+                if (request?.Ids == null || request.Ids.Count == 0)
+                {
+                    return Ok(Array.Empty<UserProfileSummary>());
+                }
+
+                if (request.Ids.Count > 200)
+                {
+                    return BadRequest(new { Message = "Too many ids (max 200)." });
+                }
+
+                var summaries = await _userService.GetProfileSummariesAsync(request.Ids);
+                return Ok(summaries);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error fetching batch profile summaries");
+                return StatusCode(500, new { Message = "An error occurred while fetching profile summaries" });
+            }
+        }
+
         // Add this method to the AuthController class
         [HttpPut("verification-update")]
         [Authorize]

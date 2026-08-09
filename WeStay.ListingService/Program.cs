@@ -24,6 +24,17 @@ builder.Services.AddScoped<IListingService, ListingService>();
 builder.Services.AddScoped<ISearchService, SearchService>();
 builder.Services.AddScoped<IImageStorageService, AzureBlobImageStorageService>();
 
+// Host enrichment: batched + cached AuthService profile lookups (hostName / hostIsVerified /
+// hostAvatarUrl on listing & search responses). Short timeout so a slow AuthService can never
+// stall a search; the internal profile-summary endpoints require the shared service key.
+builder.Services.AddMemoryCache();
+builder.Services.AddHttpClient<IHostProfileService, HostProfileService>(c =>
+{
+    c.Timeout = TimeSpan.FromSeconds(3);
+    var internalKey = builder.Configuration["ServiceAuth:InternalApiKey"];
+    if (!string.IsNullOrEmpty(internalKey)) c.DefaultRequestHeaders.Add("X-Internal-Api-Key", internalKey);
+});
+
 // Configure JWT Authentication
 var jwtKey = builder.Configuration["Jwt:Key"];
 if (string.IsNullOrEmpty(jwtKey) || jwtKey.Length < 32)

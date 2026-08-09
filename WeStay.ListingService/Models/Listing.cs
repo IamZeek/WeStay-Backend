@@ -104,6 +104,13 @@ namespace WeStay.ListingService.Models
         public double AverageRating { get; set; } = 0;
         public int ReviewCount { get; set; } = 0;
 
+        // Host display info, enriched AT READ TIME from AuthService (HostProfileService) — never
+        // stored here. [NotMapped] so EF ignores them; serialized additively on listing/search
+        // responses as hostName / hostIsVerified / hostAvatarUrl.
+        [NotMapped] public string? HostName { get; set; }
+        [NotMapped] public bool HostIsVerified { get; set; }
+        [NotMapped] public string? HostAvatarUrl { get; set; }
+
         // Navigation properties
         public virtual ICollection<Amenity> Amenities { get; set; }
         public virtual ICollection<ListingImage> Images { get; set; }

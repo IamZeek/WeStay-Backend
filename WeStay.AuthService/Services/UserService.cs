@@ -75,6 +75,33 @@ namespace WeStay.AuthService.Services
             return user;
         }
 
+        public async Task<List<UserProfileSummary>> GetProfileSummariesAsync(IReadOnlyCollection<int> ids)
+        {
+            var idList = ids.Distinct().ToList();
+            if (idList.Count == 0) return new List<UserProfileSummary>();
+
+            var users = await _context.Users
+                .Where(u => idList.Contains(u.Id))
+                .Select(u => new { u.Id, u.FirstName, u.LastName, u.ProfilePicture })
+                .ToListAsync();
+
+            // IsVerified = the user has a KYC Verification row with Status Approved.
+            var verified = (await _context.Verifications
+                .Where(v => idList.Contains(v.UserId) && v.Status == VerificationStatus.Approved)
+                .Select(v => v.UserId)
+                .Distinct()
+                .ToListAsync()).ToHashSet();
+
+            return users.Select(u => new UserProfileSummary
+            {
+                Id = u.Id,
+                FirstName = u.FirstName,
+                LastName = u.LastName,
+                IsVerified = verified.Contains(u.Id),
+                AvatarUrl = u.ProfilePicture
+            }).ToList();
+        }
+
         public async Task<bool> UpdateUserStatusAsync(int id,string type)
         {
             var user = await _context.Users.FirstOrDefaultAsync(x => x.Id == id);

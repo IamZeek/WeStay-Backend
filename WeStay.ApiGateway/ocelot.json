@@ -129,6 +129,15 @@
       "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE" ],
       "AuthenticationOptions": { "AuthenticationProviderKey": "Bearer", "AllowedScopes": [] }
     },
+    // Public read-only platform fee percentages (BookingService). Anonymous by design — guests see
+    // an accurate pre-booking fee breakdown; the Admin-only /api/admin/fees stays gated above.
+    {
+      "DownstreamPathTemplate": "/api/fees",
+      "DownstreamScheme": "https",
+      "DownstreamHostAndPorts": [ { "Host": "localhost", "Port": 7292 } ],
+      "UpstreamPathTemplate": "/api/fees",
+      "UpstreamHttpMethod": [ "GET", "OPTIONS" ]
+    },
     // SafePay browser redirect landing pages (/payment/success, /payment/cancel). Public (the redirect
     // carries no JWT); GET only. Covers both success + cancel via the wildcard.
     {

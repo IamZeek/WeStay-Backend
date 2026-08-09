@@ -17,12 +17,14 @@ namespace WeStay.ListingService.Controllers
     {
         private readonly IListingService _listingService;
         private readonly IImageStorageService _imageStorageService;
+        private readonly IHostProfileService _hostProfileService;
         private readonly ILogger<ListingsController> _logger;
 
-        public ListingsController(IListingService listingService, IImageStorageService imageStorageService, ILogger<ListingsController> logger)
+        public ListingsController(IListingService listingService, IImageStorageService imageStorageService, IHostProfileService hostProfileService, ILogger<ListingsController> logger)
         {
             _listingService = listingService;
             _imageStorageService = imageStorageService;
+            _hostProfileService = hostProfileService;
             _logger = logger;
         }
 
@@ -60,6 +62,9 @@ namespace WeStay.ListingService.Controllers
                 {
                     return NotFound(new { Message = "Listing not found" });
                 }
+
+                // Attach host display info (hostName / hostIsVerified / hostAvatarUrl).
+                await _hostProfileService.EnrichAsync(new[] { listing });
 
                 return Ok(listing);
             }
