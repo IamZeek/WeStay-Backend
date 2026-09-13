@@ -11,6 +11,10 @@ using System.Text;
 using Microsoft.Extensions.FileProviders;
 using WeStay.MessagingService.Settings;
 
+// See the note in WeStay.AuthService/Program.cs — Npgsql 6+ rejects DateTime values whose Kind
+// is not Utc. This restores SQL Server-equivalent "timestamp without time zone" mapping.
+AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
@@ -19,7 +23,7 @@ var connectionString = builder.Configuration.GetConnectionString("MessagingConne
         "Connection string 'MessagingConnection' is not configured. " +
         "Set it via User Secrets or an environment variable (it must not be committed to appsettings.json).");
 builder.Services.AddDbContext<MessagingDbContext>(options =>
-    options.UseSqlServer(connectionString));
+    options.UseNpgsql(connectionString));
 
 // Add SignalR for real-time messaging
 builder.Services.AddSignalR(options =>

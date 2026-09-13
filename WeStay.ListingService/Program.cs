@@ -9,6 +9,10 @@ using WeStay.ListingService.Data;
 using WeStay.ListingService.Services.Interfaces;
 using WeStay.ListingService.Services;
 
+// See the note in WeStay.AuthService/Program.cs — Npgsql 6+ rejects DateTime values whose Kind
+// is not Utc. This restores SQL Server-equivalent "timestamp without time zone" mapping.
+AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
@@ -17,7 +21,7 @@ var connectionString = builder.Configuration.GetConnectionString("ListingDbConne
         "Connection string 'ListingDbConnection' is not configured. " +
         "Set it via User Secrets or an environment variable (it must not be committed to appsettings.json).");
 builder.Services.AddDbContext<ListingDbContext>(options =>
-    options.UseSqlServer(connectionString));
+    options.UseNpgsql(connectionString));
 
 // Register services
 builder.Services.AddScoped<IListingService, ListingService>();

@@ -9,6 +9,11 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 
+// See the note in WeStay.AuthService/Program.cs — Npgsql 6+ rejects DateTime values whose Kind
+// is not Utc. Booking CheckInDate/CheckOutDate arrive from JSON with Kind=Unspecified, so this
+// switch is load-bearing here.
+AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
@@ -17,7 +22,7 @@ var connectionString = builder.Configuration.GetConnectionString("BookingConnect
         "Connection string 'BookingConnection' is not configured. " +
         "Set it via User Secrets or an environment variable (it must not be committed to appsettings.json).");
 builder.Services.AddDbContext<BookingDbContext>(options =>
-    options.UseSqlServer(connectionString));
+    options.UseNpgsql(connectionString));
 
 // Add JWT Authentication
 var jwtKey = builder.Configuration["Jwt:Key"];

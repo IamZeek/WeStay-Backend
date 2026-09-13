@@ -2,8 +2,8 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using WeStay.NotificationService.Data;
 
 #nullable disable
@@ -18,71 +18,71 @@ namespace WeStay.NotificationService.Migrations
 #pragma warning disable 612, 618
             modelBuilder
                 .HasAnnotation("ProductVersion", "8.0.19")
-                .HasAnnotation("Relational:MaxIdentifierLength", 128);
+                .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
-            SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
+            NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
             modelBuilder.Entity("WeStay.NotificationService.Models.Notification", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
+                        .HasColumnType("integer");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
                     b.Property<string>("Channel")
                         .IsRequired()
                         .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
+                        .HasColumnType("character varying(20)");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("ErrorMessage")
                         .IsRequired()
                         .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
+                        .HasColumnType("character varying(500)");
 
                     b.Property<string>("ExternalId")
                         .IsRequired()
                         .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)");
+                        .HasColumnType("character varying(255)");
 
                     b.Property<bool>("IsRead")
-                        .HasColumnType("bit");
+                        .HasColumnType("boolean");
 
                     b.Property<bool>("IsSent")
-                        .HasColumnType("bit");
+                        .HasColumnType("boolean");
 
                     b.Property<string>("Message")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasColumnType("text");
 
                     b.Property<int>("Priority")
-                        .HasColumnType("int");
+                        .HasColumnType("integer");
 
                     b.Property<DateTime?>("ReadAt")
-                        .HasColumnType("datetime2");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<int>("RetryCount")
-                        .HasColumnType("int");
+                        .HasColumnType("integer");
 
                     b.Property<DateTime?>("SentAt")
-                        .HasColumnType("datetime2");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("Subject")
                         .IsRequired()
                         .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
+                        .HasColumnType("character varying(200)");
 
                     b.Property<int>("TypeId")
-                        .HasColumnType("int");
+                        .HasColumnType("integer");
 
                     b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("datetime2");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<int>("UserId")
-                        .HasColumnType("int");
+                        .HasColumnType("integer");
 
                     b.HasKey("Id");
 
@@ -103,51 +103,51 @@ namespace WeStay.NotificationService.Migrations
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
+                        .HasColumnType("integer");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
                     b.Property<string>("BodyTemplate")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasColumnType("text");
 
                     b.Property<string>("Channel")
                         .IsRequired()
                         .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
+                        .HasColumnType("character varying(20)");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("Description")
                         .IsRequired()
                         .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)");
+                        .HasColumnType("character varying(255)");
 
                     b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
+                        .HasColumnType("boolean");
 
                     b.Property<string>("Language")
                         .IsRequired()
                         .HasMaxLength(10)
-                        .HasColumnType("nvarchar(10)");
+                        .HasColumnType("character varying(10)");
 
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
+                        .HasColumnType("character varying(100)");
 
                     b.Property<string>("SubjectTemplate")
                         .IsRequired()
                         .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
+                        .HasColumnType("character varying(200)");
 
                     b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("datetime2");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("Variables")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasColumnType("text");
 
                     b.HasKey("Id");
 
@@ -163,13 +163,13 @@ namespace WeStay.NotificationService.Migrations
                             Id = 1,
                             BodyTemplate = "<h1>Booking Confirmed</h1><p>Dear {{UserName}},</p><p>Your booking {{BookingCode}} has been confirmed.</p><p>Check-in: {{CheckInDate}}</p><p>Check-out: {{CheckOutDate}}</p>",
                             Channel = "Email",
-                            CreatedAt = new DateTime(2026, 6, 18, 15, 58, 5, 677, DateTimeKind.Utc).AddTicks(384),
+                            CreatedAt = new DateTime(2026, 9, 13, 1, 58, 17, 884, DateTimeKind.Utc).AddTicks(5579),
                             Description = "Booking confirmation email",
                             IsActive = true,
                             Language = "en",
                             Name = "BookingConfirmation_Email",
                             SubjectTemplate = "Booking Confirmed - {{BookingCode}}",
-                            UpdatedAt = new DateTime(2026, 6, 18, 15, 58, 5, 677, DateTimeKind.Utc).AddTicks(385),
+                            UpdatedAt = new DateTime(2026, 9, 13, 1, 58, 17, 884, DateTimeKind.Utc).AddTicks(5580),
                             Variables = "[\"UserName\", \"BookingCode\", \"CheckInDate\", \"CheckOutDate\"]"
                         },
                         new
@@ -177,13 +177,13 @@ namespace WeStay.NotificationService.Migrations
                             Id = 2,
                             BodyTemplate = "Your booking {{BookingCode}} is confirmed. Check-in: {{CheckInDate}}",
                             Channel = "SMS",
-                            CreatedAt = new DateTime(2026, 6, 18, 15, 58, 5, 677, DateTimeKind.Utc).AddTicks(387),
+                            CreatedAt = new DateTime(2026, 9, 13, 1, 58, 17, 884, DateTimeKind.Utc).AddTicks(5583),
                             Description = "Booking confirmation SMS",
                             IsActive = true,
                             Language = "en",
                             Name = "BookingConfirmation_SMS",
                             SubjectTemplate = "Booking Confirmed",
-                            UpdatedAt = new DateTime(2026, 6, 18, 15, 58, 5, 677, DateTimeKind.Utc).AddTicks(387),
+                            UpdatedAt = new DateTime(2026, 9, 13, 1, 58, 17, 884, DateTimeKind.Utc).AddTicks(5584),
                             Variables = "[\"BookingCode\", \"CheckInDate\"]"
                         },
                         new
@@ -191,13 +191,13 @@ namespace WeStay.NotificationService.Migrations
                             Id = 3,
                             BodyTemplate = "<h1>Welcome {{UserName}}!</h1><p>Thank you for joining WeStay.</p>",
                             Channel = "Email",
-                            CreatedAt = new DateTime(2026, 6, 18, 15, 58, 5, 677, DateTimeKind.Utc).AddTicks(389),
+                            CreatedAt = new DateTime(2026, 9, 13, 1, 58, 17, 884, DateTimeKind.Utc).AddTicks(5586),
                             Description = "Welcome email",
                             IsActive = true,
                             Language = "en",
                             Name = "Welcome_Email",
                             SubjectTemplate = "Welcome to WeStay!",
-                            UpdatedAt = new DateTime(2026, 6, 18, 15, 58, 5, 677, DateTimeKind.Utc).AddTicks(389),
+                            UpdatedAt = new DateTime(2026, 9, 13, 1, 58, 17, 884, DateTimeKind.Utc).AddTicks(5587),
                             Variables = "[\"UserName\"]"
                         },
                         new
@@ -205,13 +205,13 @@ namespace WeStay.NotificationService.Migrations
                             Id = 4,
                             BodyTemplate = "<p>Click here to reset your password: <a href=\"{{ResetLink}}\">Reset Password</a></p>",
                             Channel = "Email",
-                            CreatedAt = new DateTime(2026, 6, 18, 15, 58, 5, 677, DateTimeKind.Utc).AddTicks(391),
+                            CreatedAt = new DateTime(2026, 9, 13, 1, 58, 17, 884, DateTimeKind.Utc).AddTicks(5589),
                             Description = "Password reset email",
                             IsActive = true,
                             Language = "en",
                             Name = "PasswordReset_Email",
                             SubjectTemplate = "Reset Your Password",
-                            UpdatedAt = new DateTime(2026, 6, 18, 15, 58, 5, 677, DateTimeKind.Utc).AddTicks(391),
+                            UpdatedAt = new DateTime(2026, 9, 13, 1, 58, 17, 884, DateTimeKind.Utc).AddTicks(5590),
                             Variables = "[\"ResetLink\"]"
                         });
                 });
@@ -220,37 +220,37 @@ namespace WeStay.NotificationService.Migrations
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
+                        .HasColumnType("integer");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("Description")
                         .IsRequired()
                         .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)");
+                        .HasColumnType("character varying(255)");
 
                     b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
+                        .HasColumnType("boolean");
 
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
+                        .HasColumnType("character varying(50)");
 
                     b.Property<string>("TemplateBody")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasColumnType("text");
 
                     b.Property<string>("TemplateSubject")
                         .IsRequired()
                         .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
+                        .HasColumnType("character varying(200)");
 
                     b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("datetime2");
+                        .HasColumnType("timestamp without time zone");
 
                     b.HasKey("Id");
 
@@ -260,90 +260,90 @@ namespace WeStay.NotificationService.Migrations
                         new
                         {
                             Id = 1,
-                            CreatedAt = new DateTime(2026, 6, 18, 15, 58, 5, 677, DateTimeKind.Utc).AddTicks(279),
+                            CreatedAt = new DateTime(2026, 9, 13, 1, 58, 17, 884, DateTimeKind.Utc).AddTicks(5428),
                             Description = "Booking confirmation notification",
                             IsActive = true,
                             Name = "BookingConfirmation",
                             TemplateBody = "Dear {{UserName}}, your booking {{BookingCode}} has been confirmed.",
                             TemplateSubject = "Booking Confirmation - {{BookingCode}}",
-                            UpdatedAt = new DateTime(2026, 6, 18, 15, 58, 5, 677, DateTimeKind.Utc).AddTicks(279)
+                            UpdatedAt = new DateTime(2026, 9, 13, 1, 58, 17, 884, DateTimeKind.Utc).AddTicks(5429)
                         },
                         new
                         {
                             Id = 2,
-                            CreatedAt = new DateTime(2026, 6, 18, 15, 58, 5, 677, DateTimeKind.Utc).AddTicks(281),
+                            CreatedAt = new DateTime(2026, 9, 13, 1, 58, 17, 884, DateTimeKind.Utc).AddTicks(5432),
                             Description = "Booking cancellation notification",
                             IsActive = true,
                             Name = "BookingCancellation",
                             TemplateBody = "Dear {{UserName}}, your booking {{BookingCode}} has been cancelled.",
                             TemplateSubject = "Booking Cancelled - {{BookingCode}}",
-                            UpdatedAt = new DateTime(2026, 6, 18, 15, 58, 5, 677, DateTimeKind.Utc).AddTicks(282)
+                            UpdatedAt = new DateTime(2026, 9, 13, 1, 58, 17, 884, DateTimeKind.Utc).AddTicks(5432)
                         },
                         new
                         {
                             Id = 3,
-                            CreatedAt = new DateTime(2026, 6, 18, 15, 58, 5, 677, DateTimeKind.Utc).AddTicks(284),
+                            CreatedAt = new DateTime(2026, 9, 13, 1, 58, 17, 884, DateTimeKind.Utc).AddTicks(5435),
                             Description = "Payment confirmation notification",
                             IsActive = true,
                             Name = "PaymentReceived",
                             TemplateBody = "Dear {{UserName}}, payment for booking {{BookingCode}} has been received.",
                             TemplateSubject = "Payment Received - {{BookingCode}}",
-                            UpdatedAt = new DateTime(2026, 6, 18, 15, 58, 5, 677, DateTimeKind.Utc).AddTicks(284)
+                            UpdatedAt = new DateTime(2026, 9, 13, 1, 58, 17, 884, DateTimeKind.Utc).AddTicks(5435)
                         },
                         new
                         {
                             Id = 4,
-                            CreatedAt = new DateTime(2026, 6, 18, 15, 58, 5, 677, DateTimeKind.Utc).AddTicks(286),
+                            CreatedAt = new DateTime(2026, 9, 13, 1, 58, 17, 884, DateTimeKind.Utc).AddTicks(5438),
                             Description = "Payment failure notification",
                             IsActive = true,
                             Name = "PaymentFailed",
                             TemplateBody = "Dear {{UserName}}, payment for booking {{BookingCode}} has failed.",
                             TemplateSubject = "Payment Failed - {{BookingCode}}",
-                            UpdatedAt = new DateTime(2026, 6, 18, 15, 58, 5, 677, DateTimeKind.Utc).AddTicks(286)
+                            UpdatedAt = new DateTime(2026, 9, 13, 1, 58, 17, 884, DateTimeKind.Utc).AddTicks(5438)
                         },
                         new
                         {
                             Id = 5,
-                            CreatedAt = new DateTime(2026, 6, 18, 15, 58, 5, 677, DateTimeKind.Utc).AddTicks(288),
+                            CreatedAt = new DateTime(2026, 9, 13, 1, 58, 17, 884, DateTimeKind.Utc).AddTicks(5440),
                             Description = "Review reminder notification",
                             IsActive = true,
                             Name = "ReviewReminder",
                             TemplateBody = "Dear {{UserName}}, how was your stay? Please leave a review.",
                             TemplateSubject = "Review Your Stay - {{BookingCode}}",
-                            UpdatedAt = new DateTime(2026, 6, 18, 15, 58, 5, 677, DateTimeKind.Utc).AddTicks(289)
+                            UpdatedAt = new DateTime(2026, 9, 13, 1, 58, 17, 884, DateTimeKind.Utc).AddTicks(5441)
                         },
                         new
                         {
                             Id = 6,
-                            CreatedAt = new DateTime(2026, 6, 18, 15, 58, 5, 677, DateTimeKind.Utc).AddTicks(291),
+                            CreatedAt = new DateTime(2026, 9, 13, 1, 58, 17, 884, DateTimeKind.Utc).AddTicks(5443),
                             Description = "Security alert notification",
                             IsActive = true,
                             Name = "SecurityAlert",
                             TemplateBody = "Security alert: {{Message}}",
                             TemplateSubject = "Security Alert - {{Subject}}",
-                            UpdatedAt = new DateTime(2026, 6, 18, 15, 58, 5, 677, DateTimeKind.Utc).AddTicks(291)
+                            UpdatedAt = new DateTime(2026, 9, 13, 1, 58, 17, 884, DateTimeKind.Utc).AddTicks(5443)
                         },
                         new
                         {
                             Id = 7,
-                            CreatedAt = new DateTime(2026, 6, 18, 15, 58, 5, 677, DateTimeKind.Utc).AddTicks(293),
+                            CreatedAt = new DateTime(2026, 9, 13, 1, 58, 17, 884, DateTimeKind.Utc).AddTicks(5446),
                             Description = "Password reset notification",
                             IsActive = true,
                             Name = "PasswordReset",
                             TemplateBody = "Click here to reset your password: {{ResetLink}}",
                             TemplateSubject = "Password Reset Request",
-                            UpdatedAt = new DateTime(2026, 6, 18, 15, 58, 5, 677, DateTimeKind.Utc).AddTicks(293)
+                            UpdatedAt = new DateTime(2026, 9, 13, 1, 58, 17, 884, DateTimeKind.Utc).AddTicks(5446)
                         },
                         new
                         {
                             Id = 8,
-                            CreatedAt = new DateTime(2026, 6, 18, 15, 58, 5, 677, DateTimeKind.Utc).AddTicks(295),
+                            CreatedAt = new DateTime(2026, 9, 13, 1, 58, 17, 884, DateTimeKind.Utc).AddTicks(5449),
                             Description = "Welcome notification",
                             IsActive = true,
                             Name = "Welcome",
                             TemplateBody = "Dear {{UserName}}, welcome to WeStay! Start exploring properties.",
                             TemplateSubject = "Welcome to WeStay!",
-                            UpdatedAt = new DateTime(2026, 6, 18, 15, 58, 5, 677, DateTimeKind.Utc).AddTicks(295)
+                            UpdatedAt = new DateTime(2026, 9, 13, 1, 58, 17, 884, DateTimeKind.Utc).AddTicks(5449)
                         });
                 });
 
@@ -351,39 +351,39 @@ namespace WeStay.NotificationService.Migrations
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
+                        .HasColumnType("integer");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
                     b.Property<bool>("BookingNotifications")
-                        .HasColumnType("bit");
+                        .HasColumnType("boolean");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<bool>("EmailEnabled")
-                        .HasColumnType("bit");
+                        .HasColumnType("boolean");
 
                     b.Property<bool>("MarketingEmails")
-                        .HasColumnType("bit");
+                        .HasColumnType("boolean");
 
                     b.Property<bool>("Newsletter")
-                        .HasColumnType("bit");
+                        .HasColumnType("boolean");
 
                     b.Property<bool>("PushEnabled")
-                        .HasColumnType("bit");
+                        .HasColumnType("boolean");
 
                     b.Property<bool>("SMSEnabled")
-                        .HasColumnType("bit");
+                        .HasColumnType("boolean");
 
                     b.Property<bool>("SecurityNotifications")
-                        .HasColumnType("bit");
+                        .HasColumnType("boolean");
 
                     b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("datetime2");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<int>("UserId")
-                        .HasColumnType("int");
+                        .HasColumnType("integer");
 
                     b.HasKey("Id");
 

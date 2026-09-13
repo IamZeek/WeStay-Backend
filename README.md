@@ -48,7 +48,7 @@ Each project already has a `<UserSecretsId>` configured, so you can set secrets 
 
 ```bash
 # --- AuthService ---
-dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Server=<your-server>;Database=WeStay;Trusted_Connection=True;MultipleActiveResultSets=true;TrustServerCertificate=true;" --project WeStay.AuthService
+dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Host=localhost;Port=5432;Database=westay_auth;Username=westay;Password=<db-password>" --project WeStay.AuthService
 dotnet user-secrets set "Jwt:Key" "<shared-32+char-key>" --project WeStay.AuthService
 dotnet user-secrets set "Authentication:Google:ClientId" "<google-client-id>" --project WeStay.AuthService
 dotnet user-secrets set "Authentication:Google:ClientSecret" "<google-client-secret>" --project WeStay.AuthService
@@ -61,15 +61,15 @@ dotnet user-secrets set "Twilio:FromPhone" "<twilio-phone>" --project WeStay.Aut
 dotnet user-secrets set "SendGrid:ApiKey" "<sendgrid-key>" --project WeStay.AuthService
 
 # --- ListingService ---
-dotnet user-secrets set "ConnectionStrings:ListingDbConnection" "Server=<your-server>;Database=WeStay;Trusted_Connection=True;MultipleActiveResultSets=true;TrustServerCertificate=true;" --project WeStay.ListingService
+dotnet user-secrets set "ConnectionStrings:ListingDbConnection" "Host=localhost;Port=5432;Database=westay_listing;Username=westay;Password=<db-password>" --project WeStay.ListingService
 dotnet user-secrets set "Jwt:Key" "<shared-32+char-key>" --project WeStay.ListingService
 
 # --- BookingService ---
-dotnet user-secrets set "ConnectionStrings:BookingConnection" "Server=<your-server>;Database=WeStay;Trusted_Connection=True;MultipleActiveResultSets=true;TrustServerCertificate=true;" --project WeStay.BookingService
+dotnet user-secrets set "ConnectionStrings:BookingConnection" "Host=localhost;Port=5432;Database=westay_booking;Username=westay;Password=<db-password>" --project WeStay.BookingService
 dotnet user-secrets set "Jwt:Key" "<shared-32+char-key>" --project WeStay.BookingService
 
 # --- MessagingService (note the key names the code reads) ---
-dotnet user-secrets set "ConnectionStrings:MessagingConnection" "Server=<your-server>;Database=WeStayMessaging;Trusted_Connection=True;MultipleActiveResultSets=true;TrustServerCertificate=true;" --project WeStay.MessagingService
+dotnet user-secrets set "ConnectionStrings:MessagingConnection" "Host=localhost;Port=5432;Database=westay_messaging;Username=westay;Password=<db-password>" --project WeStay.MessagingService
 dotnet user-secrets set "Jwt:Key" "<shared-32+char-key>" --project WeStay.MessagingService
 # Optional notification providers:
 dotnet user-secrets set "EmailSettings:UserName" "<smtp-user>" --project WeStay.MessagingService
@@ -78,7 +78,7 @@ dotnet user-secrets set "SmsSettings:TwilioAccountSid" "<twilio-sid>" --project 
 dotnet user-secrets set "SmsSettings:TwilioAuthToken" "<twilio-token>" --project WeStay.MessagingService
 
 # --- NotificationService ---
-dotnet user-secrets set "ConnectionStrings:NotificationConnection" "Server=<your-server>;Database=WeStay;Trusted_Connection=True;MultipleActiveResultSets=true;TrustServerCertificate=true;" --project WeStay.NotificationService
+dotnet user-secrets set "ConnectionStrings:NotificationConnection" "Host=localhost;Port=5432;Database=westay_notification;Username=westay;Password=<db-password>" --project WeStay.NotificationService
 dotnet user-secrets set "Jwt:Key" "<shared-32+char-key>" --project WeStay.NotificationService
 # Optional providers:
 dotnet user-secrets set "EmailSettings:UserName" "<smtp-user>" --project WeStay.NotificationService
@@ -87,9 +87,21 @@ dotnet user-secrets set "TwilioSettings:AccountSid" "<twilio-sid>" --project WeS
 dotnet user-secrets set "TwilioSettings:AuthToken" "<twilio-token>" --project WeStay.NotificationService
 dotnet user-secrets set "TwilioSettings:FromNumber" "<twilio-phone>" --project WeStay.NotificationService
 
+# --- ReviewService ---
+dotnet user-secrets set "ConnectionStrings:ReviewConnection" "Host=localhost;Port=5432;Database=westay_review;Username=westay;Password=<db-password>" --project WeStay.ReviewService
+dotnet user-secrets set "Jwt:Key" "<shared-32+char-key>" --project WeStay.ReviewService
+
 # --- ApiGateway ---
 dotnet user-secrets set "JwtSettings:Secret" "<shared-32+char-key>" --project WeStay.ApiGateway
 ```
+
+> **Database:** PostgreSQL 16 (migrated from SQL Server — see `POSTGRES-MIGRATION.md`).
+> Each service owns its own database on a single Postgres instance. Create them with:
+>
+> ```bash
+> createdb -U westay westay_auth westay_listing westay_booking \
+>          westay_messaging westay_notification westay_review
+> ```
 
 ### Deployed environments (env vars)
 

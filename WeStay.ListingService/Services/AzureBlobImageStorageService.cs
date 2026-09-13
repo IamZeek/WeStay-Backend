@@ -42,7 +42,6 @@ namespace WeStay.ListingService.Services
             }
 
             var containerClient = new BlobContainerClient(connectionString, containerName);
-            // Public read access on blobs so the returned URL works directly as ListingImage.ImageUrl.
             await containerClient.CreateIfNotExistsAsync(PublicAccessType.Blob, cancellationToken: cancellationToken);
 
             var extension = Path.GetExtension(file.FileName);

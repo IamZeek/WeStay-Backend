@@ -9,6 +9,10 @@ using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using WeStay.NotificationService.Models;
 
+// See the note in WeStay.AuthService/Program.cs — Npgsql 6+ rejects DateTime values whose Kind
+// is not Utc. This restores SQL Server-equivalent "timestamp without time zone" mapping.
+AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
@@ -17,7 +21,7 @@ var connectionString = builder.Configuration.GetConnectionString("NotificationCo
         "Connection string 'NotificationConnection' is not configured. " +
         "Set it via User Secrets or an environment variable (it must not be committed to appsettings.json).");
 builder.Services.AddDbContext<NotificationDbContext>(options =>
-    options.UseSqlServer(connectionString));
+    options.UseNpgsql(connectionString));
 
 // Configure Twilio Settings
 builder.Services.Configure<TwilioSettings>(builder.Configuration.GetSection("TwilioSettings"));

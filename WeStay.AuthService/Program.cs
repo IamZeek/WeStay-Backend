@@ -9,6 +9,13 @@ using WeStay.AuthService.Services;
 using WeStay.AuthService.Services.Interfaces;
 using WeStay.AuthService.Utilities;
 
+// Npgsql 6+ maps DateTime to "timestamp with time zone" and THROWS if the value's Kind is
+// Unspecified or Local. Dates arriving from JSON (RegisterRequest.DateOfBirth, booking dates)
+// always deserialize with Kind=Unspecified, so without this switch those saves fail at runtime.
+// This restores the SQL Server-equivalent behaviour: DateTime -> "timestamp without time zone".
+// To remove it later, convert those properties to DateOnly or normalise Kind to UTC on binding.
+AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
@@ -17,7 +24,7 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
         "Connection string 'DefaultConnection' is not configured. " +
         "Set it via User Secrets or an environment variable (it must not be committed to appsettings.json).");
 builder.Services.AddDbContext<AuthDbContext>(options =>
-    options.UseSqlServer(connectionString));
+    options.UseNpgsql(connectionString));
 
 // Register services
 builder.Services.AddScoped<IAuthService, AuthService>();
