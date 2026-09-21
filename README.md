@@ -21,7 +21,7 @@ Services **fail fast at startup** if a required secret is missing:
 | Service | Required secret keys | Optional / feature keys |
 |---------|----------------------|-------------------------|
 | `WeStay.AuthService` | `ConnectionStrings:DefaultConnection`, `Jwt:Key` | `Authentication:Google:ClientId`, `Authentication:Google:ClientSecret`, `Authentication:Facebook:AppId`, `Authentication:Facebook:AppSecret`, `Twilio:AccountSid`, `Twilio:AuthToken`, `Twilio:FromPhone`, `SendGrid:ApiKey` |
-| `WeStay.ListingService` | `ConnectionStrings:ListingDbConnection`, `Jwt:Key` | — |
+| `WeStay.ListingService` | `ConnectionStrings:ListingDbConnection`, `Jwt:Key` | `R2:AccountId`, `R2:AccessKeyId`, `R2:SecretAccessKey`, `R2:PublicBaseUrl`, `R2:BucketName` |
 | `WeStay.BookingService` | `ConnectionStrings:BookingConnection`, `Jwt:Key` | — |
 | `WeStay.MessagingService` | `ConnectionStrings:MessagingConnection`, `Jwt:Key` ⚠️ | `EmailSettings:UserName`, `EmailSettings:Password`, `SmsSettings:TwilioAccountSid`, `SmsSettings:TwilioAuthToken`, `AzureServiceBus:ConnectionString` |
 | `WeStay.NotificationService` | `ConnectionStrings:NotificationConnection`, `Jwt:Key` | `EmailSettings:UserName`, `EmailSettings:Password`, `TwilioSettings:AccountSid`, `TwilioSettings:AuthToken`, `TwilioSettings:FromNumber`, `PushNotificationSettings:PublicKey`, `PushNotificationSettings:PrivateKey` |
@@ -63,6 +63,13 @@ dotnet user-secrets set "SendGrid:ApiKey" "<sendgrid-key>" --project WeStay.Auth
 # --- ListingService ---
 dotnet user-secrets set "ConnectionStrings:ListingDbConnection" "Host=localhost;Port=5432;Database=westay_listing;Username=westay;Password=<db-password>" --project WeStay.ListingService
 dotnet user-secrets set "Jwt:Key" "<shared-32+char-key>" --project WeStay.ListingService
+# Cloudflare R2 (listing photos). PublicBaseUrl is the r2.dev subdomain or your custom domain,
+# NOT the r2.cloudflarestorage.com endpoint — that one is authenticated-only.
+dotnet user-secrets set "R2:AccountId" "<cloudflare-account-id>" --project WeStay.ListingService
+dotnet user-secrets set "R2:AccessKeyId" "<r2-access-key-id>" --project WeStay.ListingService
+dotnet user-secrets set "R2:SecretAccessKey" "<r2-secret-access-key>" --project WeStay.ListingService
+dotnet user-secrets set "R2:PublicBaseUrl" "https://pub-xxxxxxxx.r2.dev" --project WeStay.ListingService
+dotnet user-secrets set "R2:BucketName" "listing-images" --project WeStay.ListingService
 
 # --- BookingService ---
 dotnet user-secrets set "ConnectionStrings:BookingConnection" "Host=localhost;Port=5432;Database=westay_booking;Username=westay;Password=<db-password>" --project WeStay.BookingService

@@ -1,0 +1,15 @@
+# Keeps wwwroot/uploads in source control.
+#
+# Git does not track empty directories, so without this file a fresh clone has no
+# wwwroot and MessagingService crashes at startup with:
+#
+#   System.IO.DirectoryNotFoundException: ...\WeStay.MessagingService\wwwroot\
+#     at StaticWebAssetsLoader.UseStaticWebAssets(...)
+#     at WebApplication.CreateBuilder(...)
+#
+# Program.cs does call Directory.CreateDirectory for wwwroot/uploads, but that runs
+# long after CreateBuilder() has already thrown. The directory has to exist on disk
+# before the builder is constructed.
+#
+# Message attachments are written to wwwroot/uploads/messages at runtime and served
+# from /uploads. Do not commit those.

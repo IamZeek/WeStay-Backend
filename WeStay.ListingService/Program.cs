@@ -26,7 +26,9 @@ builder.Services.AddDbContext<ListingDbContext>(options =>
 // Register services
 builder.Services.AddScoped<IListingService, ListingService>();
 builder.Services.AddScoped<ISearchService, SearchService>();
-builder.Services.AddScoped<IImageStorageService, AzureBlobImageStorageService>();
+// Cloudflare R2 (S3-compatible). Singleton so the underlying S3 client is built once
+// and reused; it is thread-safe and holds a connection pool.
+builder.Services.AddSingleton<IImageStorageService, R2ImageStorageService>();
 
 // Host enrichment: batched + cached AuthService profile lookups (hostName / hostIsVerified /
 // hostAvatarUrl on listing & search responses). Short timeout so a slow AuthService can never

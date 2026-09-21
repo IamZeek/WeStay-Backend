@@ -32,7 +32,7 @@ caps at roughly $5–15 per database per month.
 | --- | --- | --- | --- | --- |
 | **Twilio** (SMS) | `Twilio` | AuthService, NotificationService | `Twilio:AccountSid/AuthToken/FromPhone`, `TwilioSettings:*` | **$0.4734/SMS to Pakistan** (~PKR 133) |
 | **SendGrid** (email) | `SendGrid` | AuthService, NotificationService | `SendGrid:ApiKey/FromEmail/FromName` | Free tier is now a **60-day trial**, then from $19.95/mo |
-| **Azure Blob Storage** (listing photos) | `Azure.Storage.Blobs` | ListingService | `AzureBlobStorage:ConnectionString`, `ContainerName` (default `listing-images`) | ~$0.02/GB/month + egress |
+| **Cloudflare R2** (listing photos) | `AWSSDK.S3` | ListingService | `R2:AccountId`, `AccessKeyId`, `SecretAccessKey`, `PublicBaseUrl`, `BucketName` | $0.015/GB/month, **zero egress**; 10 GB/month free |
 | **Safepay** (payment gateway, Pakistan) | `SFPY.net` | BookingService | `Safepay:Environment/ApiKey/V1Secret/WebhookSecret` — currently `sandbox` | Per-transaction % + fixed fee |
 | **Firebase** (push) | `FirebaseAdmin`, `Google.Cloud.Firestore` | NotificationService | `PushNotificationSettings:PublicKey/PrivateKey/Subject` | FCM push is free; **Firestore is billable if actually used** |
 | **Google OAuth** | `Google.Apis.Auth`, `Microsoft.AspNetCore.Authentication.Google` | AuthService | `Authentication:Google:ClientId/ClientSecret` | Free |
@@ -225,6 +225,8 @@ patching, easy scaling, ~40 ms latency, and SBP-approved remittance.
 - Twilio SMS on booking events: `BookingService.cs` lines 557 and 574 send SMS **and**
   email, so every completed booking currently costs ~PKR 266 in Twilio charges alone.
 - Safepay per-transaction fees once payments go live.
-- Azure Blob **egress**, not just storage — every listing photo view.
+- ~~Azure Blob egress~~ — no longer a cost: R2 charges **zero egress**, which was the main
+  reason to move off Blob. Storage is $0.015/GB/month with the first 10 GB free, so the
+  photo bill for a founding cohort is realistically zero.
 - Firestore, if `Google.Cloud.Firestore` ends up actually used.
 - SendGrid's free tier is gone: 60-day trial, then $19.95/month minimum.
